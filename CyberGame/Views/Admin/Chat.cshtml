@@ -1,0 +1,177 @@
+@{
+    ViewData["Title"] = "Tin Nhắn Khách Hàng (Messenger Dark)";
+    Layout = "_AdminLayout";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/admin/css/chat.css" asp-append-version="true" />
+}
+
+<!-- MESSENGER WORKSPACE LAYOUT -->
+  <div class="messenger-layout" id="messengerLayout">
+
+    <!-- 1. LEFT COLUMN: CHATS SIDEBAR -->
+    <aside class="messenger-sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-title-group">
+          <h2 class="sidebar-title">Chats</h2>
+        </div>
+        <div class="sidebar-actions">
+          <button class="circle-icon-btn" id="btnRefreshChat" title="Tải lại danh sách">🔄</button>
+          <button class="circle-icon-btn" id="btnNewChat" title="Tạo cuộc trò chuyện mới">✏️</button>
+        </div>
+      </div>
+
+      <!-- Search Messenger -->
+      <div class="sidebar-search-wrap">
+        <div class="search-pill-box">
+          <span>🔍</span>
+          <input type="text" class="search-pill-input" id="searchChatInput" placeholder="Tìm kiếm trên Messenger...">
+        </div>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="sidebar-filters-wrap">
+        <button class="filter-pill active" data-filter="all">Tất cả</button>
+        <button class="filter-pill" data-filter="waiting">
+          <span>Chờ Admin</span>
+          <span class="pill-count-badge" id="filterWaitingBadge" style="display:none">0</span>
+        </button>
+        <button class="filter-pill" data-filter="unread">Chưa đọc</button>
+        <button class="filter-pill" data-filter="resolved">Đã giải quyết</button>
+      </div>
+
+      <!-- Conversations Thread List -->
+      <div class="sidebar-chat-list" id="chatListContainer">
+        <!-- Rendered dynamically by admin/js/chat.js -->
+      </div>
+    </aside>
+
+    <!-- 2. MIDDLE COLUMN: MAIN CONVERSATION VIEW -->
+    <section class="messenger-main" id="messengerMain">
+      <!-- Conversation Top Bar -->
+      <div class="chat-main-header" id="chatMainHeader">
+        <div class="header-user-info" id="chatHeaderUserInfo">
+          <div class="chat-avatar-wrap" style="width: 42px; height: 42px; min-width: 42px;">
+            <div class="chat-avatar" id="activeUserAvatar">💬</div>
+            <span class="avatar-online-dot offline" id="activeUserOnlineDot" style="display: none;"></span>
+          </div>
+          <div class="header-user-details">
+            <div class="header-user-name">
+              <span id="activeUserName">Hộp Thư Phản Hồi Khách Hàng</span>
+              <span id="activeUserBadgeStatus"></span>
+            </div>
+            <div class="header-user-status" id="activeUserStatusText">
+              <span id="activeUserSubtitle">Chưa chọn máy trạm • Nhấn ✏️ để bắt đầu</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="btn-resolve-toggle waiting" id="btnToggleResolve" title="Chuyển đổi trạng thái xử lý" style="display: none;">
+            <span>⚠️ Chờ phản hồi</span>
+          </button>
+          <button class="btn-header-action" id="btnToggleInfoDrawer" title="Xem chi tiết khách hàng">ℹ️</button>
+        </div>
+      </div>
+
+      <!-- Chat Messages Scroll Container -->
+      <div class="chat-messages-stream" id="chatMessagesStream">
+        <!-- Rendered by chat.js -->
+      </div>
+
+      <!-- Quick Replies Bar (Admin shortcuts) -->
+      <div class="quick-replies-bar">
+        <span class="quick-reply-label">⚡ Gợi ý:</span>
+        <button class="quick-reply-chip" data-quick-text="Dạ CyberGame xin chào bạn! Mình có thể hỗ trợ gì cho bạn ạ?">Chào khách</button>
+        <button class="quick-reply-chip" data-quick-text="Kỹ thuật viên đang qua kiểm tra máy ngay cho bạn nhé!">Kiểm tra máy</button>
+        <button class="quick-reply-chip" data-quick-text="Nhân viên quầy đang chuẩn bị đồ ăn/nước uống mang lên máy bạn rồi ạ.">Đồ ăn lên máy</button>
+        <button class="quick-reply-chip" data-quick-text="Tài khoản của bạn đã được nạp tiền thành công. Bạn kiểm tra lại giúp mình nhé!">Nạp tiền xong</button>
+        <button class="quick-reply-chip" data-quick-text="Dạ vâng, chúc bạn chơi game vui vẻ và thoải mái ạ!">Chúc chơi vui</button>
+      </div>
+
+      <!-- Bottom Chat Input Bar -->
+      <form class="chat-main-input-bar" id="adminChatForm">
+        <div class="input-tools-left">
+          <button type="button" class="btn-input-tool" title="Ghi âm">🎙️</button>
+          <button type="button" class="btn-input-tool" title="Đính kèm ảnh">🖼️</button>
+          <button type="button" class="btn-input-tool" title="Nhãn dán">🏷️</button>
+          <button type="button" class="btn-input-tool" title="Đính kèm tệp">📎</button>
+        </div>
+
+        <div class="input-pill-wrapper">
+          <input type="text" class="admin-chat-text-input" id="adminChatInput" placeholder="Aa" autocomplete="off">
+          <span class="btn-emoji-inside" id="btnEmojiPicker" title="Chèn biểu cảm">😊</span>
+        </div>
+
+        <button type="submit" class="btn-send-message thumbs-up" id="btnSendAdminMsg" title="Gửi tin nhắn">👍</button>
+      </form>
+    </section>
+
+    <!-- 3. RIGHT COLUMN: CUSTOMER INFO DRAWER (Toggleable) -->
+    <aside class="messenger-info-drawer" id="messengerInfoDrawer">
+      <div class="drawer-header">
+        <span class="drawer-title">Thông Tin Khách Hàng</span>
+        <button class="circle-icon-btn" id="btnCloseDrawer" style="width: 28px; height: 28px; font-size: 13px;">✕</button>
+      </div>
+
+      <div class="drawer-body" id="drawerBodyContent">
+        <!-- Populated dynamically by chat.js -->
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- MODAL: NEW CHAT CONVERSATION (ZONE & SEAT SELECTOR) -->
+  <div class="admin-modal" id="modalNewChat">
+    <div class="admin-modal-box" style="max-width: 480px;">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title">
+          <span>💬</span>
+          <span>NHẮN TIN TỚI MÁY TRẠM (TẠO HỘI THOẠI MỚI)</span>
+        </div>
+        <button class="admin-modal-close" data-close-modal>×</button>
+      </div>
+      <form id="formCreateNewChat">
+        <div class="admin-modal-body">
+          <div class="admin-form-group">
+            <label for="newChatZoneSelect">1. Chọn Khu Vực Phòng Máy <span class="req">*</span></label>
+            <select id="newChatZoneSelect" class="admin-select">
+              <option value="vip" selected>VIP Zone (Khu VIP • 20 máy)</option>
+              <option value="standard">Standard Zone (Khu Thường • 40 máy)</option>
+              <option value="pro">Pro Stage (Khu Thi Đấu • 10 máy)</option>
+              <option value="stream">Stream Room (Phòng Stream • 5 máy)</option>
+            </select>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newChatSeatSelect">2. Chọn Số Máy Cần Nhắn Tin Tới <span class="req">*</span></label>
+            <select id="newChatSeatSelect" class="admin-select">
+              <!-- Populated dynamically by chat.js based on zone -->
+            </select>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newChatInitialMsg">3. Nội Dung Tin Nhắn Gửi Tới Máy <span class="req">*</span></label>
+            <textarea id="newChatInitialMsg" class="admin-input" rows="3" placeholder="Ví dụ: Chào bạn, admin hỗ trợ máy bạn cần gì không ạ?..." required></textarea>
+          </div>
+        </div>
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-admin btn-admin-outline" data-close-modal>Hủy</button>
+          <button type="submit" class="btn-admin btn-admin-primary">
+            <span>🚀</span>
+            <span>Gửi Tin Nhắn Tới Máy</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div class="admin-toast-container" id="adminToastContainer"></div>
+
+  <!-- SCRIPTS -->
+
+@section Scripts {
+    <script src="~/admin/js/chat.js" asp-append-version="true"></script>
+}

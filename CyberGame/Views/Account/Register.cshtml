@@ -1,0 +1,70 @@
+@model CyberGame.Models.ViewModels.RegisterViewModel
+@{
+    ViewData["Title"] = "Đăng ký tài khoản";
+    Layout = "_AuthLayout";
+}
+
+<main>
+<section class="auth"><div class="auth-grid">
+
+<div class="auth-form-panel"><div class="auth-box">
+<p class="eyebrow">TÀI KHOẢN</p>
+<h2>TẠO TÀI KHOẢN</h2>
+<p class="sub">Gia nhập cộng đồng Cyber Game để nhận ưu đãi thành viên và trải nghiệm không giới hạn.</p>
+
+<form asp-controller="Account" asp-action="Register" method="post" id="registerForm" autocomplete="on">
+    <div asp-validation-summary="ModelOnly" class="text-danger" style="color:#ef4444;font-size:13px;margin-bottom:15px;background:rgba(239,68,68,0.1);padding:10px;border-radius:6px"></div>
+
+    <div class="field">
+        <label asp-for="Username">TÊN TÀI KHOẢN</label>
+        <input asp-for="Username" type="text" placeholder="gamethu_pro" required>
+        <span asp-validation-for="Username" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+    </div>
+
+    <div class="two-col">
+        <div class="field">
+            <label asp-for="Email">EMAIL</label>
+            <input asp-for="Email" type="email" placeholder="vidu@email.com" required>
+            <span asp-validation-for="Email" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+        </div>
+        <div class="field">
+            <label asp-for="Phone">SỐ ĐIỆN THOẠI</label>
+            <input asp-for="Phone" type="tel" placeholder="09xx xxx xxx" required>
+            <span asp-validation-for="Phone" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="field">
+            <label asp-for="Password">MẬT KHẨU</label>
+            <input asp-for="Password" type="password" placeholder="••••••••" required>
+            <span asp-validation-for="Password" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+        </div>
+        <div class="field">
+            <label asp-for="ConfirmPassword">XÁC NHẬN MẬT KHẨU</label>
+            <input asp-for="ConfirmPassword" type="password" placeholder="••••••••" required>
+            <span asp-validation-for="ConfirmPassword" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+        </div>
+    </div>
+
+    <label class="checkbox-line"><input type="checkbox" required> Tôi đồng ý với <a href="#">Điều khoản sử dụng</a> và <a href="#">Chính sách bảo mật</a> của Cyber Game.</label>
+    <button type="submit" class="btn blue block">TẠO TÀI KHOẢN →</button>
+</form>
+
+<div class="divider">HOẶC</div>
+<div class="social-row"><button type="button">GOOGLE</button><button type="button">FACEBOOK</button></div>
+
+<p class="switch-line">Đã có tài khoản? <a asp-controller="Account" asp-action="Login">ĐĂNG NHẬP</a></p>
+</div></div>
+
+<div class="auth-visual">
+<div class="brand"><div class="mark-big">CG</div><p class="eyebrow">CYBER GAME MANAGEMENT</p><h1>GIA NHẬP<br>CỘNG ĐỒNG<span>.</span></h1><p>Tạo tài khoản để đặt máy trước, tích điểm thành viên và cập nhật sự kiện mới nhất từ hệ thống.</p></div>
+<div class="auth-perks">
+<div><i>01</i>Ưu đãi & tích điểm dành riêng cho thành viên</div>
+<div><i>02</i>Đặt chỗ trước tại mọi Cyber trong hệ thống</div>
+<div><i>03</i>Cập nhật sớm giải đấu và sự kiện gaming</div>
+</div>
+</div>
+
+</div></section>
+</main>

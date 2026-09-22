@@ -1,0 +1,312 @@
+@{
+    ViewData["Title"] = "Quản Lý Khách Hàng & Dịch Vụ";
+    Layout = "_AdminLayout";
+}
+
+<!-- MAIN CONTENT -->
+  <main class="admin-main">
+    
+    <!-- CONTROL HEADER -->
+    <div class="dashboard-control-bar">
+      <div class="dashboard-title-box">
+        <h1>
+          <span>👥</span> QUẢN LÝ KHÁCH HÀNG & DỊCH VỤ
+        </h1>
+        <p style="display:flex;align-items:center;gap:10px;margin-top:5px">
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700">
+            <span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block"></span> CYBERGAME STADIUM
+          </span>
+          <span style="color:var(--text-muted);font-size:13px">Nạp số dư, cấp tài khoản thành viên và xử lý đơn bếp FnB</span>
+        </p>
+      </div>
+
+      <div class="dashboard-filters">
+        <button class="btn-admin btn-admin-primary" id="btnOpenCreateCustomerModal">
+          <span>➕</span>
+          <span>Tạo Tài Khoản Cho Khách</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN TABS SECTION -->
+    <div class="report-tabs-section" style="margin-top: 24px;">
+      <div class="report-tabs-header">
+        <div class="report-nav-tabs">
+          <button class="tab-btn active" data-tab="tabCustomers">
+            <span>👥</span> Danh Sách Tài Khoản Khách Hàng
+            <span class="badge info" id="customerCountBadge" style="margin-left: 6px;">0</span>
+          </button>
+          <button class="tab-btn" data-tab="tabOrders">
+            <span>🍔</span> Xử Lý Đơn Đồ Ăn & Dịch Vụ
+            <span class="badge yellow" id="pendingOrdersBadge" style="margin-left: 6px;">0 Chờ</span>
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div class="table-search-box">
+            <span>🔍</span>
+            <input type="text" id="mainSearchInput" placeholder="Tìm tên, Gmail hoặc mã đơn...">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 1: CUSTOMER ACCOUNTS LIST -->
+      <div class="report-tab-pane active" id="tabCustomers">
+        <div style="padding: 14px 22px; background: rgba(22, 112, 255, 0.04); border-bottom: 1px solid var(--admin-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+            <span>💡</span>
+            <span><strong>Mẹo:</strong> Nhấp chuột phải (Right-click) vào bất kỳ khách hàng nào để <strong>Nạp tiền</strong>, <strong>Sửa thông tin</strong> hoặc <strong>Xóa tài khoản</strong>.</span>
+          </div>
+          <div style="display: flex; gap: 14px; font-size: 13px;">
+            <span>Tổng số dư hội viên: <strong id="totalCustomerBalance" style="color: var(--admin-green);">0 VNĐ</strong></span>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Mã KH</th>
+                <th>Họ và Tên</th>
+                <th>Gmail / Email</th>
+                <th>Số Dư Tài Khoản</th>
+                <th>Trạng Thái</th>
+                <th>Ngày Tạo</th>
+                <th style="text-align: right;">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="customersTableBody">
+              <!-- Rendered by customers.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 2: FNB ORDERS QUEUE -->
+      <div class="report-tab-pane" id="tabOrders">
+        <div style="padding: 14px 22px; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid var(--admin-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; gap: 8px;">
+            <button class="tab-btn active order-filter-btn" data-filter="all">Tất cả</button>
+            <button class="tab-btn order-filter-btn" data-filter="pending">Chờ nhận</button>
+            <button class="tab-btn order-filter-btn" data-filter="preparing">Đang làm</button>
+            <button class="tab-btn order-filter-btn" data-filter="served">Đã phục vụ</button>
+            <button class="tab-btn order-filter-btn" data-filter="completed">Đã xong</button>
+          </div>
+          <div style="font-size: 13px; color: var(--text-muted);">
+            Tiến trình: <span style="color: var(--admin-yellow);">Chờ nhận</span> ➔ <span style="color: var(--admin-cyan);">Đang làm</span> ➔ <span style="color: var(--admin-purple);">Đã phục vụ</span> ➔ <span style="color: var(--admin-green);">Hoàn tất</span>
+          </div>
+        </div>
+
+        <div id="ordersContainer">
+          <!-- Rendered by customers.js -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- CUSTOM RIGHT-CLICK CONTEXT MENU -->
+  <div class="custom-context-menu" id="customerContextMenu">
+    <div class="context-menu-header" id="ctxCustomerTitle">KHÁCH HÀNG</div>
+    <button class="context-menu-item" id="ctxBtnTopUp">
+      <span class="icon">💵</span>
+      <span>Nạp tiền cho tài khoản</span>
+    </button>
+    <button class="context-menu-item" id="ctxBtnEdit">
+      <span class="icon">✏️</span>
+      <span>Sửa thông tin tài khoản</span>
+    </button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item danger" id="ctxBtnDelete">
+      <span class="icon">🗑️</span>
+      <span>Xóa tài khoản này</span>
+    </button>
+  </div>
+
+  <!-- MODAL: CREATE NEW CUSTOMER ACCOUNT -->
+  <div class="admin-modal" id="createCustomerModal">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title">
+          <span>➕</span>
+          <span>TẠO TÀI KHOẢN KHÁCH HÀNG</span>
+        </div>
+        <button class="admin-modal-close" data-close-modal>×</button>
+      </div>
+      <form id="formCreateCustomer">
+        <div class="admin-modal-body">
+          <div class="admin-form-group">
+            <label for="newCustName">Họ và Tên <span class="req">*</span></label>
+            <input type="text" id="newCustName" class="admin-input" placeholder="Ví dụ: Nguyễn Văn Hoàng" required>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newCustEmail">Địa Chỉ Gmail / Email <span class="req">*</span></label>
+            <input type="email" id="newCustEmail" class="admin-input" placeholder="Ví dụ: example@gmail.com" required>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newCustInitialBalance">Số Tiền Nạp Ban Đầu (VNĐ)</label>
+            <input type="number" id="newCustInitialBalance" class="admin-input" min="0" step="10000" value="50000" placeholder="0">
+            <div class="quick-amount-grid">
+              <button type="button" class="btn-quick-amount" data-add-balance="20000">+20.000đ</button>
+              <button type="button" class="btn-quick-amount" data-add-balance="50000">+50.000đ</button>
+              <button type="button" class="btn-quick-amount" data-add-balance="100000">+100.000đ</button>
+              <button type="button" class="btn-quick-amount" data-add-balance="200000">+200.000đ</button>
+              <button type="button" class="btn-quick-amount" data-add-balance="500000">+500.000đ</button>
+              <button type="button" class="btn-quick-amount" data-set-balance="0">Đặt 0đ</button>
+            </div>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newCustPaymentMethod">Phương Thức Thanh Toán Nạp Tiền</label>
+            <select id="newCustPaymentMethod" class="admin-select">
+              <option value="cash">Tiền mặt tại quầy</option>
+              <option value="transfer">Chuyển khoản VietQR</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-admin btn-admin-outline" data-close-modal>Hủy</button>
+          <button type="submit" class="btn-admin btn-admin-primary">
+            <span>💾</span>
+            <span>Tạo Tài Khoản</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: TOP UP BALANCE -->
+  <div class="admin-modal" id="topUpModal">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title">
+          <span>💵</span>
+          <span>NẠP TIỀN CHO KHÁCH HÀNG</span>
+        </div>
+        <button class="admin-modal-close" data-close-modal>×</button>
+      </div>
+      <form id="formTopUp">
+        <input type="hidden" id="topUpCustomerId">
+        <div class="admin-modal-body">
+          <div style="background: #090b0f; border: 1px solid var(--admin-border); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="color: var(--text-muted); font-size: 12px; font-weight: 700;">TÀI KHOẢN:</span>
+              <strong id="topUpCustomerName" style="color: #fff; font-size: 15px;">Nguyễn Văn A</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: var(--text-muted); font-size: 12px; font-weight: 700;">SỐ DƯ HIỆN TẠI:</span>
+              <span id="topUpCurrentBalance" style="color: var(--admin-green); font-size: 16px; font-weight: 800;">0 VNĐ</span>
+            </div>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="topUpAmount">Số Tiền Nạp Thêm (VNĐ) <span class="req">*</span></label>
+            <input type="number" id="topUpAmount" class="admin-input" min="10000" step="10000" value="50000" required>
+            <div class="quick-amount-grid">
+              <button type="button" class="btn-quick-amount" data-topup-val="20000">+20.000đ</button>
+              <button type="button" class="btn-quick-amount" data-topup-val="50000">+50.000đ</button>
+              <button type="button" class="btn-quick-amount" data-topup-val="100000">+100.000đ</button>
+              <button type="button" class="btn-quick-amount" data-topup-val="200000">+200.000đ</button>
+              <button type="button" class="btn-quick-amount" data-topup-val="500000">+500.000đ</button>
+              <button type="button" class="btn-quick-amount" data-topup-val="1000000">+1.000.000đ</button>
+            </div>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="topUpMethod">Phương Thức Thanh Toán</label>
+            <select id="topUpMethod" class="admin-select">
+              <option value="cash">Tiền mặt tại quầy</option>
+              <option value="transfer">Chuyển khoản VietQR</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-admin btn-admin-outline" data-close-modal>Hủy</button>
+          <button type="submit" class="btn-admin btn-admin-primary">
+            <span>⚡</span>
+            <span>Xác Nhận Nạp Tiền</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT CUSTOMER INFO -->
+  <div class="admin-modal" id="editCustomerModal">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title">
+          <span>✏️</span>
+          <span>SỬA THÔNG TIN KHÁCH HÀNG</span>
+        </div>
+        <button class="admin-modal-close" data-close-modal>×</button>
+      </div>
+      <form id="formEditCustomer">
+        <input type="hidden" id="editCustomerId">
+        <div class="admin-modal-body">
+          <div class="admin-form-group">
+            <label for="editCustName">Họ và Tên <span class="req">*</span></label>
+            <input type="text" id="editCustName" class="admin-input" required>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="editCustEmail">Địa Chỉ Gmail / Email <span class="req">*</span></label>
+            <input type="email" id="editCustEmail" class="admin-input" placeholder="Ví dụ: example@gmail.com" required>
+          </div>
+
+          <div class="admin-form-group">
+            <label for="editCustStatus">Trạng Thái Tài Khoản</label>
+            <select id="editCustStatus" class="admin-select">
+              <option value="active">Đang hoạt động</option>
+              <option value="locked">Tạm khóa tài khoản</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-admin btn-admin-outline" data-close-modal>Hủy</button>
+          <button type="submit" class="btn-admin btn-admin-primary">
+            <span>💾</span>
+            <span>Lưu Thay Đổi</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DELETE CONFIRMATION -->
+  <div class="admin-modal" id="deleteCustomerModal">
+    <div class="admin-modal-box" style="max-width: 440px;">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title" style="color: #ef4444;">
+          <span>🗑️</span>
+          <span>XÓA TÀI KHOẢN</span>
+        </div>
+        <button class="admin-modal-close" data-close-modal>×</button>
+      </div>
+      <div class="admin-modal-body" style="text-align: center; padding: 30px 20px;">
+        <div style="font-size: 40px; margin-bottom: 15px;">⚠️</div>
+        <h3 style="font-size: 18px; margin-bottom: 10px;">Bạn có chắc chắn muốn xóa?</h3>
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.6;">
+          Tài khoản của <strong id="deleteCustomerName" style="color: #fff;">Nguyễn Văn A</strong> sẽ bị xóa vĩnh viễn khỏi danh sách hệ thống phòng máy.
+        </p>
+      </div>
+      <div class="admin-modal-footer" style="justify-content: center; gap: 14px;">
+        <button type="button" class="btn-admin btn-admin-outline" data-close-modal>Không, giữ lại</button>
+        <button type="button" class="btn-admin" id="btnConfirmDelete" style="background: #ef4444; color: #fff;">
+          <span>Đồng ý xóa vĩnh viễn</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div class="admin-toast-container" id="adminToastContainer"></div>
+
+  <!-- SCRIPTS -->
+
+@section Scripts {
+    <script src="~/admin/js/customers.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,50 @@
+@model CyberGame.Models.ViewModels.LoginViewModel
+@{
+    ViewData["Title"] = "Đăng nhập";
+    Layout = "_AuthLayout";
+}
+
+<main>
+<section class="auth"><div class="auth-grid">
+
+<div class="auth-visual">
+<div class="brand"><div class="mark-big">CG</div><p class="eyebrow">NEXT LEVEL GAMING EXPERIENCE</p><h1>CHÀO MỪNG<br>TRỞ LẠI<span>.</span></h1><p>Đăng nhập để đặt chỗ, theo dõi ưu đãi thành viên và quản lý tài khoản Cyber Game của bạn.</p></div>
+<div class="auth-stats"><div><strong data-nocount>4</strong><small>KHU VỰC</small></div><div><strong data-nocount>75</strong><small>MÁY GAMING</small></div><div><strong data-nocount>24/7</strong><small>HOẠT ĐỘNG</small></div></div>
+</div>
+
+<div class="auth-form-panel"><div class="auth-box">
+<p class="eyebrow">TÀI KHOẢN</p>
+<h2>ĐĂNG NHẬP</h2>
+<p class="sub">Nhập thông tin tài khoản để tiếp tục trải nghiệm cùng Cyber Game.</p>
+
+<form asp-controller="Account" asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post" id="loginForm" autocomplete="on">
+    <div asp-validation-summary="ModelOnly" class="text-danger" style="color:#ef4444;font-size:13px;margin-bottom:15px;background:rgba(239,68,68,0.1);padding:10px;border-radius:6px"></div>
+
+    <div class="field">
+        <label asp-for="Username">TÊN TÀI KHOẢN / EMAIL</label>
+        <input asp-for="Username" type="text" placeholder="Tên tài khoản hoặc email..." required autofocus>
+        <span asp-validation-for="Username" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+    </div>
+
+    <div class="field">
+        <label asp-for="Password">MẬT KHẨU</label>
+        <input asp-for="Password" type="password" placeholder="••••••••" required>
+        <span asp-validation-for="Password" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+    </div>
+
+    <div class="row-between">
+        <label class="checkbox"><input asp-for="RememberMe" type="checkbox"> Ghi nhớ đăng nhập</label>
+        <a class="forgot" href="#">QUÊN MẬT KHẨU?</a>
+    </div>
+
+    <button type="submit" class="btn blue block">ĐĂNG NHẬP →</button>
+</form>
+
+<div class="divider">HOẶC</div>
+<div class="social-row"><button type="button">GOOGLE</button><button type="button">FACEBOOK</button></div>
+
+<p class="switch-line">Chưa có tài khoản? <a asp-controller="Account" asp-action="Register">ĐĂNG KÝ NGAY</a></p>
+</div></div>
+
+</div></section>
+</main>

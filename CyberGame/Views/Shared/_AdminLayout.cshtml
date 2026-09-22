@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " - CyberGame Admin" : "CyberGame Admin | Portal")</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/admin/css/admin.css" asp-append-version="true">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="admin-body">
+    <header class="admin-header">
+        <div class="admin-header-inner">
+            <div class="admin-brand-group">
+                <a asp-controller="Admin" asp-action="Index" class="admin-brand">
+                    <span class="brand-logo-box">CG</span>
+                    <b>CYBER<span>GAME</span></b>
+                </a>
+                <div class="admin-portal-badge">
+                    <span class="live-dot"></span>
+                    <span>ADMIN PORTAL</span>
+                </div>
+            </div>
+
+            <nav class="admin-nav-links">
+                <a asp-controller="Admin" asp-action="Index" class="admin-nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")">
+                    <span>📊</span>
+                    <span>Thống Kê & Báo Cáo</span>
+                </a>
+                <a asp-controller="Admin" asp-action="Customers" class="admin-nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Customers" ? "active" : "")">
+                    <span>👥</span>
+                    <span>Quản Lý Khách Hàng</span>
+                </a>
+                <a asp-controller="Admin" asp-action="Chat" class="admin-nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Chat" ? "active" : "")">
+                    <span>💬</span>
+                    <span>Tin Nhắn Khách Hàng</span>
+                    <span class="chat-nav-badge" id="navChatPendingBadge" style="display:none">0</span>
+                </a>
+            </nav>
+
+            <div class="admin-header-actions">
+                <a asp-controller="Home" asp-action="Index" class="btn-view-site">
+                    <span>🌐</span>
+                    <span>Về Website Khách</span>
+                </a>
+                <div class="admin-user-pill">
+                    <div class="admin-avatar">@(User.Identity?.Name != null ? User.Identity.Name.Substring(0, Math.Min(2, User.Identity.Name.Length)).ToUpper() : "AD")</div>
+                    <div class="admin-user-info">
+                        <span class="admin-user-name">@(User.Identity?.Name ?? "admin")</span>
+                        <span class="admin-user-role">Quản Trị Viên</span>
+                    </div>
+                </div>
+                <a asp-controller="Account" asp-action="Logout" class="btn-admin btn-admin-outline" style="padding:4px 10px;font-size:12px;color:#ef4444;border-color:rgba(239,68,68,0.3);text-decoration:none" title="Đăng xuất khỏi hệ thống">
+                    <span>🚪</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    @RenderBody()
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

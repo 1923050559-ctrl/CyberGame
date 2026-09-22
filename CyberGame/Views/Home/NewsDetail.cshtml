@@ -1,0 +1,42 @@
+@model CyberGame.Models.Entities.KnowledgeBase
+@{
+    ViewData["Title"] = Model?.Question ?? "Chi tiết bài viết";
+    var related = ViewBag.RelatedArticles as List<CyberGame.Models.Entities.KnowledgeBase> ?? new List<CyberGame.Models.Entities.KnowledgeBase>();
+}
+
+<main id="newsDetailPage" style="padding-bottom:80px">
+<section class="banner" style="min-height:280px;padding:60px 0 40px"><div class="container reveal">
+  <p class="eyebrow" style="color:var(--blue2)">@Model?.Category • @Model?.CreatedAt.ToString("dd/MM/yyyy")</p>
+  <h1 style="font-size:36px;line-height:1.3;max-width:900px">@Model?.Question</h1>
+</div></section>
+
+<section class="light" style="padding:40px 0"><div class="container" style="display:grid;grid-template-columns:1fr 340px;gap:50px;align-items:start">
+  <!-- BÀI VIẾT CHÍNH -->
+  <article style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:35px">
+    <div style="font-size:16px;line-height:1.9;color:#e5e7eb;white-space:pre-line">
+      @Model?.Answer
+    </div>
+    
+    <div style="margin-top:40px;padding-top:25px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+      <a asp-controller="Home" asp-action="News" class="btn outline" style="padding:8px 18px;font-size:13px">← QUAY LẠI DANH SÁCH</a>
+      <a asp-controller="Home" asp-action="Booking" class="btn blue" style="padding:8px 18px;font-size:13px">ĐẶT MÁY NGAY →</a>
+    </div>
+  </article>
+
+  <!-- SIDEBAR BÀI VIẾT LIÊN QUAN -->
+  <aside style="display:flex;flex-direction:column;gap:25px">
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:25px">
+      <h3 style="font-size:17px;color:#fff;margin-bottom:18px;font-weight:700;border-left:3px solid var(--blue);padding-left:10px">HƯỚNG DẪN KHÁC</h3>
+      <div style="display:flex;flex-direction:column;gap:15px">
+        @foreach (var r in related)
+        {
+            <div style="padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)">
+              <span style="font-size:11px;color:var(--blue);font-weight:700">@r.Category</span>
+              <h4 style="font-size:14px;margin:4px 0"><a asp-controller="Home" asp-action="NewsDetail" asp-route-id="@r.KnowledgeId" style="color:#fff;text-decoration:none;line-height:1.4">@r.Question</a></h4>
+            </div>
+        }
+      </div>
+    </div>
+  </aside>
+</div></section>
+</main>

@@ -1,0 +1,242 @@
+@model IEnumerable<CyberGame.Models.Entities.Food>
+@{
+    ViewData["Title"] = "Thực đơn F&B - CyberGame";
+}
+
+<main id="menuPage">
+<section class="banner"><div class="container reveal"><p class="eyebrow">FOOD & DRINKS</p><h1>MENU<br><span>CYBER</span></h1><p>Nạp năng lượng không làm gián đoạn cuộc chơi. Đặt món mang đến tận máy!</p></div></section>
+
+<section class="menu-section"><div class="container">
+  <div class="menu-grid" style="display:grid;grid-template-columns:1fr 350px;gap:30px;align-items:start">
+    <div class="menu-list-wrap">
+      <div class="menu-filter" id="menuFilter" style="display:flex;gap:10px;margin-bottom:30px;flex-wrap:wrap">
+        <button class="btn blue filter-btn" data-filter="all">Tất cả</button>
+        <button class="btn filter-btn" style="background:#232830;color:#fff" data-filter="food">Đồ ăn</button>
+        <button class="btn filter-btn" style="background:#232830;color:#fff" data-filter="drink">Thức uống</button>
+        <button class="btn filter-btn" style="background:#232830;color:#fff" data-filter="snack">Đồ ăn vặt</button>
+        <button class="btn filter-btn" style="background:#232830;color:#fff" data-filter="utility">Tiện ích</button>
+      </div>
+      
+      <h2 class="title" style="margin-bottom:20px;font-size:24px">DANH SÁCH <span>MÓN ĂN & TIỆN ÍCH</span></h2>
+      <div id="fullMenuList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px">
+        @if (Model != null)
+        {
+            @foreach (var item in Model)
+            {
+                <div class="menu-item-card" data-category="@item.Category" style="background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+                  <div style="height:150px;background-image:url('@item.ImageUrl');background-size:cover;background-position:center;position:relative">
+                    <span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase">@item.Category</span>
+                  </div>
+                  <div style="padding:15px;display:flex;flex-direction:column;flex:1">
+                    <h4 style="font-size:15px;color:#fff;margin-bottom:6px">@item.Name</h4>
+                    <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05)">
+                      <span style="color:var(--blue);font-weight:700;font-size:15px">@item.Price.ToString("N0") đ</span>
+                      <button type="button" class="btn blue btn-add-cart" 
+                              data-id="@item.FoodId" 
+                              data-name="@item.Name" 
+                              data-price="@item.Price" 
+                              style="padding:6px 12px;font-size:12px;border-radius:6px">
+                        + THÊM
+                      </button>
+                    </div>
+                  </div>
+                </div>
+            }
+        }
+      </div>
+    </div>
+    
+    <div class="cart-wrap" style="position:sticky;top:100px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:25px">
+      <h3 style="font-size:18px;margin-bottom:20px;display:flex;justify-content:space-between">
+        <span>Giỏ hàng của bạn</span> 
+        <span id="cartCount" style="background:var(--blue);color:#fff;border-radius:20px;padding:2px 10px;font-size:12px">0</span>
+      </h3>
+      
+      <div class="form-group" style="margin-bottom:20px">
+        <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--text-muted)">Vị trí máy đang ngồi <span style="color:#ef4444">*</span></label>
+        <input type="text" id="cartSeat" placeholder="Ví dụ: V05, S12..." required style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--line);background:#1a1e24;color:#fff;box-sizing:border-box">
+      </div>
+      
+      <div id="cartItems" style="min-height:120px;max-height:300px;overflow-y:auto;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:15px;display:flex;flex-direction:column;gap:12px;padding-right:5px">
+        <div style="color:var(--text-gray);text-align:center;margin:auto" id="cartEmptyMsg">Giỏ hàng trống</div>
+      </div>
+      
+      <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;margin-bottom:20px">
+        <span>Tổng cộng:</span>
+        <span id="cartTotal" style="color:var(--blue2)">0 VNĐ</span>
+      </div>
+      
+      <div class="form-group" style="margin-bottom:20px">
+        <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--text-muted)">Phương thức thanh toán</label>
+        <select id="cartPayment" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--line);background:#1a1e24;color:#fff;box-sizing:border-box">
+          <option value="cash">Tiền mặt (khi nhận đồ)</option>
+          <option value="transfer">Chuyển khoản QR</option>
+          <option value="wallet">Trừ số dư tài khoản</option>
+        </select>
+      </div>
+      
+      <button class="btn blue w-100" id="btnCheckout" style="width:100%;padding:14px;font-weight:700;font-size:14px;border-radius:8px">ĐẶT MÓN NGAY</button>
+    </div>
+  </div>
+</div></section>
+</main>
+
+<!-- MODAL THÔNG BÁO THÀNH CÔNG -->
+<div class="modal" id="orderSuccessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:center;justify-content:center">
+  <div class="modal-box" style="background:#14171d;border:1px solid var(--line);border-radius:12px;padding:35px 25px;max-width:440px;width:90%;text-align:center;position:relative">
+    <p class="eyebrow" style="color:var(--blue2)">ĐẶT HÀNG THÀNH CÔNG</p>
+    <h2 style="font-size:24px;margin:10px 0 15px;color:#fff" id="successOrderTitle">MÃ ĐƠN HÀNG: #0</h2>
+    <p style="color:#9097a1;font-size:14px;line-height:1.6;margin-bottom:25px" id="successOrderMsg">Nhân viên sẽ chuẩn bị và mang đồ ăn đến tận máy cho bạn trong ít phút. Chúc bạn chơi game vui vẻ!</p>
+    <button class="btn blue" id="btnCloseOrderSuccess" style="padding:10px 30px;font-weight:700;border-radius:6px">ĐÓNG</button>
+  </div>
+</div>
+
+@section Scripts {
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let cart = [];
+
+    // Filter categories
+    const filterBtns = document.querySelectorAll(".filter-btn");
+    const itemCards = document.querySelectorAll(".menu-item-card");
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener("click", function() {
+            filterBtns.forEach(b => {
+                b.classList.remove("blue");
+                b.style.background = "#232830";
+            });
+            this.classList.add("blue");
+            this.style.background = "";
+
+            const cat = this.getAttribute("data-filter");
+            itemCards.forEach(card => {
+                if (cat === "all" || card.getAttribute("data-category") === cat) {
+                    card.style.display = "flex";
+                } else {
+                    card.style.display = "none";
+                }
+            });
+        });
+    });
+
+    // Add to cart
+    document.querySelectorAll(".btn-add-cart").forEach(btn => {
+        btn.addEventListener("click", function() {
+            const id = parseInt(this.getAttribute("data-id"));
+            const name = this.getAttribute("data-name");
+            const price = parseFloat(this.getAttribute("data-price"));
+
+            const existing = cart.find(i => i.id === id);
+            if (existing) {
+                existing.qty++;
+            } else {
+                cart.push({ id, name, price, qty: 1 });
+            }
+            renderCart();
+        });
+    });
+
+    function renderCart() {
+        const container = document.getElementById("cartItems");
+        const countSpan = document.getElementById("cartCount");
+        const totalSpan = document.getElementById("cartTotal");
+
+        const totalCount = cart.reduce((sum, i) => sum + i.qty, 0);
+        const totalPrice = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
+
+        countSpan.textContent = totalCount;
+        totalSpan.textContent = new Intl.NumberFormat('vi-VN').format(totalPrice) + ' VNĐ';
+
+        if (cart.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-gray);text-align:center;margin:auto">Giỏ hàng trống</div>';
+            return;
+        }
+
+        container.innerHTML = cart.map(item => `
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:6px">
+                <div style="flex:1;overflow:hidden">
+                    <div style="color:#fff;font-size:13px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${item.name}</div>
+                    <div style="color:var(--blue);font-size:12px">${new Intl.NumberFormat('vi-VN').format(item.price)} đ</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <button type="button" class="btn-qty" data-id="${item.id}" data-action="dec" style="width:24px;height:24px;background:#2a303c;color:#fff;border:none;border-radius:4px;cursor:pointer">-</button>
+                    <span style="font-size:13px;font-weight:700;min-width:18px;text-align:center">${item.qty}</span>
+                    <button type="button" class="btn-qty" data-id="${item.id}" data-action="inc" style="width:24px;height:24px;background:#2a303c;color:#fff;border:none;border-radius:4px;cursor:pointer">+</button>
+                </div>
+            </div>
+        `).join('');
+
+        container.querySelectorAll(".btn-qty").forEach(btn => {
+            btn.addEventListener("click", function() {
+                const id = parseInt(this.getAttribute("data-id"));
+                const action = this.getAttribute("data-action");
+                const item = cart.find(i => i.id === id);
+                if (item) {
+                    if (action === "inc") item.qty++;
+                    if (action === "dec") item.qty--;
+                    if (item.qty <= 0) {
+                        cart = cart.filter(i => i.id !== id);
+                    }
+                    renderCart();
+                }
+            });
+        });
+    }
+
+    // Checkout
+    document.getElementById("btnCheckout").addEventListener("click", async function() {
+        if (cart.length === 0) {
+            alert("Vui lòng chọn ít nhất 1 món vào giỏ hàng.");
+            return;
+        }
+
+        const seat = document.getElementById("cartSeat").value.trim();
+        if (!seat) {
+            alert("Vui lòng nhập vị trí máy bạn đang ngồi (ví dụ: V05, S12...).");
+            document.getElementById("cartSeat").focus();
+            return;
+        }
+
+        const payment = document.getElementById("cartPayment").value;
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = "Đang xử lý...";
+
+        try {
+            const res = await fetch("/Home/CreateFoodOrder", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    seatNumber: seat,
+                    paymentMethod: payment,
+                    items: cart.map(i => ({ foodId: i.id, name: i.name, price: i.price, quantity: i.qty }))
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                cart = [];
+                renderCart();
+                document.getElementById("cartSeat").value = "";
+                document.getElementById("successOrderTitle").textContent = "MÃ ĐƠN HÀNG: #" + data.orderId;
+                document.getElementById("successOrderMsg").textContent = data.message + " - Đơn đã được lưu vào hệ thống CyberGame Stadium!";
+                const modal = document.getElementById("orderSuccessModal");
+                modal.style.display = "flex";
+            } else {
+                alert(data.message || "Lỗi khi đặt món.");
+            }
+        } catch (e) {
+            alert("Lỗi kết nối tới máy chủ: " + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "ĐẶT MÓN NGAY";
+        }
+    });
+
+    document.getElementById("btnCloseOrderSuccess").addEventListener("click", function() {
+        document.getElementById("orderSuccessModal").style.display = "none";
+    });
+});
+</script>
+}

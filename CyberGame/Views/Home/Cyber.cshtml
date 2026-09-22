@@ -1,0 +1,43 @@
+@model IEnumerable<CyberGame.Models.Entities.Zone>
+@{
+    ViewData["Title"] = "Hệ thống phòng máy Gaming";
+}
+
+<main>
+<section class="banner"><div class="container reveal"><p class="eyebrow">HỆ THỐNG CYBER</p><h1>PHÒNG MÁY<br><span>HIỆN ĐẠI</span></h1><p>Khám phá các khu vực máy, cấu hình phần cứng đỉnh cao và dịch vụ chuyên nghiệp.</p></div></section>
+
+<section class="light" id="cyberPage"><div class="container">
+  <div class="section-head">
+    <div><span class="num">01</span><p class="eyebrow">KHU VỰC PHÒNG MÁY</p><h2 class="title">TẤT CẢ<br><span>KHU VỰC</span></h2></div>
+    <p class="section-desc">Đáp ứng đa dạng nhu cầu: từ luyện tập cá nhân, leo rank cùng bạn bè, streaming cho tới phòng đôi riêng tư.</p>
+  </div>
+  
+  <div class="cybers" id="allCybers">
+    @foreach (var zone in Model)
+    {
+        var zoneImg = zone.ZoneName.Contains("VIP") 
+            ? "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80"
+            : zone.ZoneName.Contains("Stream") || zone.ZoneName.Contains("Thi Đấu")
+            ? "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80"
+            : zone.ZoneName.Contains("Đôi") || zone.ZoneName.Contains("Couple")
+            ? "https://images.unsplash.com/photo-1598550476439-6847785fcea6?auto=format&fit=crop&w=800&q=80"
+            : "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80";
+
+        <article class="cyber-card">
+          <div class="thumb" style="background-image:url('@zoneImg')">
+            <span class="badge" style="position:absolute;top:15px;right:15px;background:rgba(0,0,0,0.8);color:var(--blue);border:1px solid var(--blue);padding:4px 10px;border-radius:4px;font-size:12px;font-weight:700">@zone.PricePerHour.ToString("N0") đ / giờ</span>
+          </div>
+          <div class="body">
+            <h3 class="name">@zone.ZoneName</h3>
+            <p class="meta" style="color:var(--text-muted);font-size:13px;margin:8px 0 12px">Quy mô: <strong>@zone.Computers.Count máy tính</strong> | Trạng thái: <span style="color:#10b981">Đang phục vụ</span></p>
+            <p class="specs-preview" style="font-size:13px;line-height:1.6;color:#c1c7cd;margin-bottom:15px">@zone.Specs</p>
+            <div class="cyber-actions" style="display:flex;gap:10px;margin-top:auto">
+              <a class="btn blue" asp-controller="Home" asp-action="Booking" asp-route-zoneId="@zone.ZoneId" style="flex:1;text-align:center">ĐẶT MÁY NGAY →</a>
+              <a class="btn outline" asp-controller="Home" asp-action="CyberDetail" asp-route-id="@zone.ZoneId">CHI TIẾT</a>
+            </div>
+          </div>
+        </article>
+    }
+  </div>
+</div></section>
+</main>

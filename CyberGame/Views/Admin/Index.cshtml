@@ -1,0 +1,327 @@
+@{
+    ViewData["Title"] = "Báo Cáo & Thống Kê Kinh Doanh";
+    Layout = "_AdminLayout";
+}
+
+<!-- MAIN DASHBOARD CONTENT -->
+  <main class="admin-main" id="adminDashboardContent">
+    
+    <!-- TOP ACTION & FILTER CONTROLS -->
+    <div class="dashboard-control-bar">
+      <div class="dashboard-title-box">
+        <h1>
+          <span>📊</span> BÁO CÁO & THỐNG KÊ KINH DOANH
+        </h1>
+        <p style="display:flex;align-items:center;gap:10px;margin-top:5px">
+          <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700">
+            <span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block"></span> CYBERGAME STADIUM (CHI NHÁNH DUY NHẤT)
+          </span>
+          <span style="color:var(--text-muted);font-size:13px">Theo dõi doanh thu Booking, FnB, Thuê Gear và Bảo trì phòng máy</span>
+        </p>
+      </div>
+
+      <div class="dashboard-filters">
+        <!-- Period Selector -->
+        <div class="filter-select-wrap">
+          <label for="filterPeriod">Thời gian:</label>
+          <select id="filterPeriod">
+            <option value="today" selected>Hôm nay</option>
+            <option value="week">7 ngày gần nhất</option>
+            <option value="month">Tháng này</option>
+            <option value="quarter">Quý này</option>
+            <option value="year">Năm 2026</option>
+          </select>
+        </div>
+
+        <!-- Refresh Button -->
+        <button class="btn-admin btn-admin-outline" id="btnRefreshData" title="Tải lại số liệu mới nhất">
+          <span>🔄</span>
+          <span>Làm mới</span>
+        </button>
+
+        <!-- Export CSV Button -->
+        <button class="btn-admin btn-admin-primary" id="btnExportReport" title="Xuất báo cáo dưới dạng file Excel/CSV">
+          <span>📥</span>
+          <span>Xuất Báo Cáo</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI OVERVIEW METRIC CARDS (5 CARDS) -->
+    <div class="kpi-grid">
+      <!-- KPI 1: Total Revenue -->
+      <div class="kpi-card blue">
+        <div class="kpi-header">
+          <span class="kpi-title">Tổng Doanh Thu</span>
+          <div class="kpi-icon">💰</div>
+        </div>
+        <div class="kpi-value" id="kpiTotalRevenue">0 VNĐ</div>
+        <div class="kpi-footer">
+          <span class="kpi-trend" id="kpiTotalRevenueTrend" style="color:var(--text-muted)">0%</span>
+          <span class="kpi-subtitle">Booking + FnB + Gear</span>
+        </div>
+      </div>
+
+      <!-- KPI 2: Booking Revenue -->
+      <div class="kpi-card green">
+        <div class="kpi-header">
+          <span class="kpi-title">Doanh Thu Booking</span>
+          <div class="kpi-icon">🎟️</div>
+        </div>
+        <div class="kpi-value" id="kpiBookingRevenue">0 VNĐ</div>
+        <div class="kpi-footer">
+          <span class="kpi-trend" id="kpiBookingTrend" style="color:var(--text-muted)">0%</span>
+          <span class="kpi-subtitle" id="kpiBookingPct">Chiếm 0% tổng thu</span>
+        </div>
+      </div>
+
+      <!-- KPI 3: FnB Revenue -->
+      <div class="kpi-card yellow">
+        <div class="kpi-header">
+          <span class="kpi-title">Doanh Thu FnB</span>
+          <div class="kpi-icon">🍔</div>
+        </div>
+        <div class="kpi-value" id="kpiFnbRevenue">0 VNĐ</div>
+        <div class="kpi-footer">
+          <span class="kpi-trend" id="kpiFnbTrend" style="color:var(--text-muted)">0%</span>
+          <span class="kpi-subtitle" id="kpiFnbPct">Chiếm 0% tổng thu</span>
+        </div>
+      </div>
+
+      <!-- KPI 4: Gear Rental Revenue -->
+      <div class="kpi-card purple">
+        <div class="kpi-header">
+          <span class="kpi-title">Thuê Gear & Dụng Cụ</span>
+          <div class="kpi-icon">🎧</div>
+        </div>
+        <div class="kpi-value" id="kpiGearRevenue">0 VNĐ</div>
+        <div class="kpi-footer">
+          <span class="kpi-trend" id="kpiGearTrend" style="color:var(--text-muted)">0%</span>
+          <span class="kpi-subtitle" id="kpiGearPct">Chiếm 0% tổng thu</span>
+        </div>
+      </div>
+
+      <!-- KPI 5: Maintenance Cost & Status -->
+      <div class="kpi-card red">
+        <div class="kpi-header">
+          <span class="kpi-title">Chi Phí Bảo Trì</span>
+          <div class="kpi-icon">🔧</div>
+        </div>
+        <div class="kpi-value" id="kpiMaintenanceCost">0 VNĐ</div>
+        <div class="kpi-footer">
+          <span class="kpi-trend" id="kpiMaintenanceCount" style="color:var(--text-muted)">0 sự vụ ghi nhận</span>
+          <span class="kpi-subtitle">Vật tư & thay thế</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHARTS SECTION 1: REVENUE TREND & DOUGHNUT BREAKDOWN -->
+    <div class="charts-grid-main">
+      <!-- Line Chart -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title-area">
+            <h3>Xu Hướng Doanh Thu Trong Ngày</h3>
+            <p>Biến động doanh thu theo khung giờ giữa Booking, FnB và Thuê Gear</p>
+          </div>
+          <div class="chart-legend-custom">
+            <span class="legend-badge"><span class="dot" style="background:#10b981"></span> Booking</span>
+            <span class="legend-badge"><span class="dot" style="background:#f59e0b"></span> FnB</span>
+            <span class="legend-badge"><span class="dot" style="background:#00d2ff"></span> Nạp ví / Khác</span>
+          </div>
+        </div>
+        <div class="chart-body">
+          <canvas id="revenueTrendChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Doughnut Chart -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title-area">
+            <h3>Cơ Cấu Nguồn Thu</h3>
+            <p>Tỷ trọng đóng góp từ các mảng dịch vụ</p>
+          </div>
+        </div>
+        <div class="chart-body" style="display:flex;align-items:center;justify-content:center;">
+          <canvas id="categoryDoughnutChart"></canvas>
+        </div>
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr;gap:8px;font-size:12px;color:var(--text-muted);">
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px">
+            <span><span style="color:#10b981">■</span> Doanh thu Booking:</span>
+            <strong style="color:#fff" id="piePctBooking">0%</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px">
+            <span><span style="color:#f59e0b">■</span> Doanh thu FnB:</span>
+            <strong style="color:#fff" id="piePctFnb">0%</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding-bottom:4px">
+            <span><span style="color:#00d2ff">■</span> Tiền nạp ví & Dịch vụ khác:</span>
+            <strong style="color:#fff" id="piePctGear">0%</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHARTS SECTION 2: WEEKDAY REVENUE & MAINTENANCE STATS -->
+    <div class="charts-grid-secondary">
+      <!-- Weekday Bar Chart -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title-area">
+            <h3>Doanh Thu Các Ngày Trong Tuần</h3>
+            <p>Thống kê phân bổ nguồn thu từ Thứ 2 đến Chủ Nhật</p>
+          </div>
+          <div class="chart-legend-custom">
+            <span class="legend-badge"><span class="dot" style="background:#10b981"></span> Booking</span>
+            <span class="legend-badge"><span class="dot" style="background:#f59e0b"></span> FnB</span>
+            <span class="legend-badge"><span class="dot" style="background:#00d2ff"></span> Nạp ví / Khác</span>
+          </div>
+        </div>
+        <div class="chart-body">
+          <canvas id="weekdayRevenueChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Maintenance Operations Chart -->
+      <!-- Maintenance Operations Chart -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-title-area">
+            <h3>Thống Kê Hoạt Động Bảo Trì Phòng Máy</h3>
+            <p>Số sự cố & chi phí sửa chữa theo nhóm trang thiết bị</p>
+          </div>
+          <div class="chart-legend-custom">
+            <span class="legend-badge"><span class="dot" style="background:#ef4444"></span> Chi phí (VNĐ)</span>
+            <span class="legend-badge"><span class="dot" style="background:#00d2ff"></span> Số vụ</span>
+          </div>
+        </div>
+        <div class="chart-body">
+          <canvas id="maintenanceChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAILED REPORTS & DATA TABLES WITH TABS -->
+    <div class="report-tabs-section">
+      <div class="report-tabs-header">
+        <div class="report-nav-tabs">
+          <button class="tab-btn active" data-tab="tabTransactions">
+            <span>📋</span> Danh Sách Booking & FnB
+          </button>
+          <button class="tab-btn" data-tab="tabGearRentals">
+            <span>🎧</span> Thống Kê Thuê Gear & Dụng Cụ
+          </button>
+          <button class="tab-btn" data-tab="tabMaintenance">
+            <span>🔧</span> Nhật Ký & Chi Phí Bảo Trì
+          </button>
+          <button class="tab-btn" data-tab="tabTopItems">
+            <span>🍔</span> Top Món FnB Bán Chạy
+          </button>
+        </div>
+
+        <div class="table-search-box">
+          <span>🔍</span>
+          <input type="text" id="txSearchInput" placeholder="Tìm kiếm nhanh trong bảng...">
+        </div>
+      </div>
+
+      <!-- Tab 1: Bookings & Transactions Table -->
+      <div class="report-tab-pane active" id="tabTransactions">
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Mã Đơn</th>
+                <th>Khách Hàng</th>
+                <th>Số Điện Thoại</th>
+                <th>Tiền Booking</th>
+                <th>Tiền FnB</th>
+                <th>Tiền Thuê Gear</th>
+                <th>Tổng Cộng</th>
+                <th>Thanh Toán</th>
+                <th>Trạng Thái</th>
+              </tr>
+            </thead>
+            <tbody id="transactionsTableBody">
+              <!-- Dynamically populated by admin.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 2: Gear Rental Table -->
+      <div class="report-tab-pane" id="tabGearRentals">
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Mã Gear</th>
+                <th>Tên Thiết Bị / Dụng Cụ</th>
+                <th>Phân Loại</th>
+                <th>Giá Thuê / Giờ</th>
+                <th>Số Lượt Thuê</th>
+                <th>Doanh Thu Đạt Được</th>
+                <th>Tình Trạng</th>
+              </tr>
+            </thead>
+            <tbody id="gearTableBody">
+              <!-- Dynamically populated by admin.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 3: Maintenance Logs Table -->
+      <div class="report-tab-pane" id="tabMaintenance">
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Mã Phiếu</th>
+                <th>Vị Trí / Máy</th>
+                <th>Thiết Bị / Hạng Mục</th>
+                <th>Chi Tiết Sự Cố / Thay Thế</th>
+                <th>Chi Phí (VNĐ)</th>
+                <th>Kỹ Thuật Viên</th>
+                <th>Ngày Bảo Trì</th>
+                <th>Trạng Thái</th>
+              </tr>
+            </thead>
+            <tbody id="maintenanceTableBody">
+              <!-- Dynamically populated by admin.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 4: Top Food Items Table -->
+      <div class="report-tab-pane" id="tabTopItems">
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Hạng</th>
+                <th>Tên Món / Thức Uống</th>
+                <th>Danh Mục</th>
+                <th>Đơn Giá</th>
+                <th>Số Lượng Bán</th>
+                <th>Doanh Thu Đạt Được</th>
+                <th>Đóng Góp %</th>
+              </tr>
+            </thead>
+            <tbody id="topFoodTableBody">
+              <!-- Dynamically populated by admin.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- SCRIPTS -->
+
+@section Scripts {
+    <script src="~/admin/js/admin.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/style.css" asp-append-version="true">
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " | Cyber Game" : "Cyber Game | Hệ thống phòng máy đẳng cấp")</title>
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+    <header>
+        <div class="container head">
+            <a class="brand" asp-controller="Home" asp-action="Index">
+                <span class="mark">CG</span><b>CYBER<span>GAME</span></b>
+            </a>
+            <nav>
+                <a asp-controller="Home" asp-action="Index">VỀ CHÚNG TÔI</a>
+                <a asp-controller="Home" asp-action="Games">GAME</a>
+                <a asp-controller="Home" asp-action="Cyber">CYBER</a>
+                <a asp-controller="Home" asp-action="Booking">ĐẶT MÁY</a>
+                <a asp-controller="Home" asp-action="Menu">MENU</a>
+                <a asp-controller="Home" asp-action="News">TIN TỨC</a>
+            </nav>
+            <div class="head-right">
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <div style="display:flex;align-items:center;gap:10px">
+                        @if (User.IsInRole("admin"))
+                        {
+                            <a asp-controller="Admin" asp-action="Index" class="btn outline" style="padding:6px 14px;font-size:12px;border-color:var(--blue);color:var(--blue)">ADMIN PORTAL ↗</a>
+                        }
+                        <button class="account" id="accountBtn" style="border-color:#10b981">
+                            <span style="color:#10b981">●</span> <span>@User.Identity.Name</span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <button class="account" id="accountBtn">◯ <span>Tài khoản</span></button>
+                }
+                <button class="hamb" aria-label="Menu"><span></span><span></span><span></span></button>
+            </div>
+        </div>
+    </header>
+
+    @RenderBody()
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a class="brand" asp-controller="Home" asp-action="Index">
+                        <span class="mark">CG</span><b>CYBER<span>GAME</span></b>
+                    </a>
+                    <p>Hệ sinh thái gaming toàn diện, phục vụ cộng đồng game thủ 24/7 với trang thiết bị chuẩn Esports.</p>
+                </div>
+                <div class="footer-col">
+                    <h3>HỆ SINH THÁI</h3>
+                    <a asp-controller="Home" asp-action="Cyber">Hệ thống Cyber</a>
+                    <a asp-controller="Home" asp-action="Games">Kho game</a>
+                    <a asp-controller="Home" asp-action="Menu">Thực đơn F&B</a>
+                    <a asp-controller="Home" asp-action="News">Tin tức & Sự kiện</a>
+                </div>
+                <div class="footer-col">
+                    <h3>LIÊN KẾT</h3>
+                    <a asp-controller="Home" asp-action="Index" asp-fragment="about">Về chúng tôi</a>
+                    <a href="#">Điều khoản sử dụng</a>
+                    <a href="#">Chính sách bảo mật</a>
+                    <a href="#">Thỏa thuận người dùng</a>
+                </div>
+                <div class="footer-col">
+                    <h3>LIÊN HỆ</h3>
+                    <p>CyberGame Stadium, Việt Nam</p>
+                    <a href="mailto:admin@cybergame.vn">admin@cybergame.vn</a>
+                    <a href="tel:0901234567">090 123 4567</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© 2026 Cyber Game Management. All rights reserved.</span>
+                <div class="social">
+                    <a href="#">FB</a>
+                    <a href="#">YT</a>
+                    <a href="#">TK</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MODAL TÀI KHOẢN -->
+    <div class="modal" id="modal">
+        <div class="backdrop" data-close></div>
+        <div class="modal-box" style="text-align:center">
+            <button class="close" data-close>×</button>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <p class="eyebrow" style="color:var(--blue)">HỘI VIÊN CYBERGAME</p>
+                <h2 style="margin:8px 0 12px">@User.Identity.Name</h2>
+                <p style="color:var(--text-muted);font-size:14px;margin-bottom:20px">Chào mừng bạn trở lại với CyberGame Stadium!</p>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    @if (User.IsInRole("admin"))
+                    {
+                        <a class="btn blue" asp-controller="Admin" asp-action="Index">VÀO TRANG QUẢN TRỊ ADMIN →</a>
+                    }
+                    <a class="btn outline" asp-controller="Home" asp-action="Booking">ĐẶT MÁY GAMING</a>
+                    <a class="btn outline" asp-controller="Home" asp-action="Menu">GỌI MÓN BẾP F&B</a>
+                    <a class="btn" style="background:#ef4444;color:#fff" asp-controller="Account" asp-action="Logout">ĐĂNG XUẤT</a>
+                </div>
+            }
+            else
+            {
+                <p class="eyebrow" style="color:var(--blue)">CYBER GAME</p>
+                <h2 style="margin:8px 0 12px">TÀI KHOẢN</h2>
+                <p style="color:var(--text-muted);font-size:14px;margin-bottom:20px">Đăng nhập để đặt chỗ trước, theo dõi số dư ví và hưởng ưu đãi hội viên.</p>
+                <div style="display:flex;gap:10px">
+                    <a class="btn blue" asp-controller="Account" asp-action="Login" style="flex:1;text-align:center">ĐĂNG NHẬP</a>
+                    <a class="btn outline" asp-controller="Account" asp-action="Register" style="flex:1;text-align:center">ĐĂNG KÝ</a>
+                </div>
+            }
+        </div>
+    </div>
+    <button class="top">↑</button>
+
+    <script src="~/js/main.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

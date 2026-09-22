@@ -1,0 +1,211 @@
+@model CyberGame.Models.ViewModels.BookingPageViewModel
+@{
+    ViewData["Title"] = "Đặt máy & Dịch vụ Gaming";
+}
+
+<main id="bookingPage">
+  <section class="booking-section">
+    <div class="container">
+      <form id="bookingForm" class="booking-form">
+        <div class="section-head reveal" style="justify-content: center; text-align: center; margin-bottom: 40px; width: 100%;">
+          <div>
+            <p class="eyebrow" style="color:var(--blue)">ONLINE RESERVATION</p>
+            <h2 class="title">THÔNG TIN <span>ĐẶT MÁY</span></h2>
+          </div>
+        </div>
+        
+        <div class="booking-grid">
+          <!-- CỘT TRÁI: FORM ĐIỀN THÔNG TIN -->
+          <div class="booking-form-wrap reveal">
+            <div class="form-group">
+              <label for="bName">Tên người đặt <span style="color:#ef4444">*</span></label>
+              <input type="text" id="bName" placeholder="Ví dụ: Nguyễn Văn A" required>
+            </div>
+            
+            <div class="form-group">
+              <label for="bPhone">Số điện thoại <span style="color:#ef4444">*</span></label>
+              <input type="tel" id="bPhone" placeholder="09xx xxx xxx" pattern="[0-9]+" required>
+            </div>
+
+            <div class="form-group">
+              <label for="bPeople">Số lượng người</label>
+              <input type="number" id="bPeople" min="1" max="10" value="1" required>
+            </div>
+
+            <div class="form-group">
+              <label for="bZone">Khu vực / Loại máy <span style="color:#ef4444">*</span></label>
+              <select id="bZone" required>
+                <option value="">-- Chọn khu vực máy --</option>
+                @if (Model?.Zones != null)
+                {
+                    @foreach (var zone in Model.Zones)
+                    {
+                        <option value="@zone.ZoneId" data-price="@zone.PricePerHour" data-name="@zone.ZoneName">
+                            @zone.ZoneName - @zone.PricePerHour.ToString("N0") đ/h (@zone.Computers.Count máy)
+                        </option>
+                    }
+                }
+              </select>
+            </div>
+            
+            <div class="form-group row-group" style="display:flex;gap:15px">
+              <div class="col-half" style="flex:1">
+                <label for="bDateTime">Thời gian bắt đầu</label>
+                <input type="datetime-local" id="bDateTime" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--line);background:#1a1e24;color:#fff" required>
+              </div>
+              <div class="col-half" style="flex:1">
+                <label for="bDuration">Thời gian chơi (Giờ)</label>
+                <input type="number" id="bDuration" min="1" max="24" value="2" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="bPayment">Phương thức thanh toán</label>
+              <select id="bPayment" required>
+                <option value="counter">Thanh toán tại quầy</option>
+                @if (Model?.PaymentMethods != null)
+                {
+                    @foreach (var pm in Model.PaymentMethods)
+                    {
+                        <option value="@pm.Code">@pm.Name</option>
+                    }
+                }
+              </select>
+            </div>
+          </div>
+          
+          <!-- CỘT PHẢI: TỔNG QUAN & XÁC NHẬN -->
+          <div class="booking-right reveal" style="display:flex;flex-direction:column;gap:30px">
+            <div class="booking-summary-wrap" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;justify-content:space-between;height:100%">
+              <div class="booking-summary" id="bSummary" style="flex:1;margin-bottom:20px;background:#0c0e12;border:1px solid #2a2e36;padding:24px;border-radius:8px">
+                <h3 style="color:var(--blue2);font-size:18px;margin-bottom:15px;font-weight:700">TỔNG QUAN ĐẶT CHỖ</h3>
+                <div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+                  <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Khu vực:</span><strong id="sumZone">-</strong></div>
+                  <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Đơn giá:</span><span id="sumPrice">0 đ/h</span></div>
+                  <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Thời lượng:</span><span id="sumDuration">2 giờ</span></div>
+                  <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;font-size:16px"><span style="color:#fff;font-weight:700">Tạm tính:</span><strong id="sumTotal" style="color:var(--blue)">0 VNĐ</strong></div>
+                </div>
+              </div>
+              
+              <div style="text-align:center">
+                <button type="submit" class="btn blue" id="bSubmitBtn" style="padding:16px 30px;font-size:16px;width:100%;font-weight:800;border-radius:8px">XÁC NHẬN ĐẶT CHỖ →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL THÀNH CÔNG -->
+<div class="modal" id="bookingSuccessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center">
+  <div class="modal-box" style="background:#14171d;border:1px solid var(--line);border-radius:12px;padding:35px 25px;max-width:460px;width:90%;text-align:center;position:relative">
+    <p class="eyebrow" style="color:#10b981">ĐẶT MÁY THÀNH CÔNG</p>
+    <h2 style="font-size:24px;margin:10px 0 15px;color:#fff" id="successBookingId">MÃ ĐẶT CHỖ: #0</h2>
+    <p style="color:#9097a1;font-size:14px;line-height:1.6;margin-bottom:20px" id="successBookingInfo">Hệ thống đã giữ máy cho bạn.</p>
+    <a asp-controller="Home" asp-action="Index" class="btn blue" style="padding:10px 30px;font-weight:700;border-radius:6px;display:inline-block">VỀ TRANG CHỦ</a>
+  </div>
+</div>
+
+@section Scripts {
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Set default datetime to now + 30 mins
+    const now = new Date(Date.now() + 30 * 60000);
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById("bDateTime").value = now.toISOString().slice(0, 16);
+
+    const zoneSelect = document.getElementById("bZone");
+    const durationInput = document.getElementById("bDuration");
+
+    function updateSummary() {
+        const opt = zoneSelect.options[zoneSelect.selectedIndex];
+        if (!opt || !opt.value) {
+            document.getElementById("sumZone").textContent = "-";
+            document.getElementById("sumPrice").textContent = "0 đ/h";
+            document.getElementById("sumTotal").textContent = "0 VNĐ";
+            return;
+        }
+
+        const price = parseFloat(opt.getAttribute("data-price")) || 0;
+        const name = opt.getAttribute("data-name") || opt.textContent;
+        const dur = parseInt(durationInput.value) || 2;
+        const total = price * dur;
+
+        document.getElementById("sumZone").textContent = name;
+        document.getElementById("sumPrice").textContent = new Intl.NumberFormat('vi-VN').format(price) + " đ/h";
+        document.getElementById("sumDuration").textContent = dur + " giờ";
+        document.getElementById("sumTotal").textContent = new Intl.NumberFormat('vi-VN').format(total) + " VNĐ";
+    }
+
+    zoneSelect.addEventListener("change", updateSummary);
+    durationInput.addEventListener("input", updateSummary);
+    updateSummary();
+
+    // Check URL param ?zoneId=X
+    const urlParams = new URLSearchParams(window.location.search);
+    const zId = urlParams.get('zoneId');
+    if (zId) {
+        zoneSelect.value = zId;
+        updateSummary();
+    }
+
+    // Submit Booking form
+    document.getElementById("bookingForm").addEventListener("submit", async function(e) {
+        e.preventDefault();
+
+        const name = document.getElementById("bName").value.trim();
+        const phone = document.getElementById("bPhone").value.trim();
+        const people = parseInt(document.getElementById("bPeople").value) || 1;
+        const zoneId = parseInt(zoneSelect.value);
+        const dt = document.getElementById("bDateTime").value;
+        const dur = parseInt(durationInput.value) || 2;
+        const payment = document.getElementById("bPayment").value;
+
+        if (!zoneId) {
+            alert("Vui lòng chọn khu vực máy.");
+            return;
+        }
+
+        const btn = document.getElementById("bSubmitBtn");
+        btn.disabled = true;
+        btn.textContent = "Đang xử lý...";
+
+        try {
+            const res = await fetch("/Home/CreateBooking", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    customerName: name,
+                    phone: phone,
+                    numberOfPeople: people,
+                    zoneId: zoneId,
+                    startTime: dt ? new Date(dt).toISOString() : new Date().toISOString(),
+                    durationHours: dur,
+                    paymentMethod: payment
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById("successBookingId").textContent = "MÃ ĐẶT CHỖ: #" + data.bookingId;
+                document.getElementById("successBookingInfo").innerHTML = `
+                    Máy chỉ định: <strong>#${data.computerId}</strong><br>
+                    Thời gian: ${data.startTime} - ${data.endTime}<br>
+                    ${data.message}
+                `;
+                document.getElementById("bookingSuccessModal").style.display = "flex";
+            } else {
+                alert(data.message || "Đặt chỗ thất bại.");
+            }
+        } catch (err) {
+            alert("Lỗi khi kết nối tới máy chủ: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "XÁC NHẬN ĐẶT CHỖ →";
+        }
+    });
+});
+</script>
+}

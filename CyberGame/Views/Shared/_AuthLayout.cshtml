@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/style.css" asp-append-version="true">
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " | Cyber Game" : "Tài khoản | Cyber Game")</title>
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="auth-page">
+    <header>
+        <div class="container head">
+            <a class="brand" asp-controller="Home" asp-action="Index">
+                <span class="mark">CG</span><b>CYBER<span>GAME</span></b>
+            </a>
+            <nav>
+                <a asp-controller="Home" asp-action="Index">VỀ CHÚNG TÔI</a>
+                <a asp-controller="Home" asp-action="Games">GAME</a>
+                <a asp-controller="Home" asp-action="Cyber">CYBER</a>
+                <a asp-controller="Home" asp-action="Booking">ĐẶT MÁY</a>
+                <a asp-controller="Home" asp-action="Menu">MENU</a>
+                <a asp-controller="Home" asp-action="News">TIN TỨC</a>
+            </nav>
+            <div class="head-right">
+                @if (ViewContext.RouteData.Values["action"]?.ToString() == "Login")
+                {
+                    <a class="account" asp-controller="Account" asp-action="Register">◯ <span>Đăng ký</span></a>
+                }
+                else
+                {
+                    <a class="account" asp-controller="Account" asp-action="Login">◯ <span>Đăng nhập</span></a>
+                }
+                <button class="hamb" aria-label="Menu"><span></span><span></span><span></span></button>
+            </div>
+        </div>
+    </header>
+
+    @RenderBody()
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a class="brand" asp-controller="Home" asp-action="Index">
+                        <span class="mark">CG</span><b>CYBER<span>GAME</span></b>
+                    </a>
+                    <p>Hệ thống phòng game hiện đại dành cho cộng đồng game thủ.</p>
+                </div>
+                <div class="footer-col">
+                    <h3>HỆ SINH THÁI</h3>
+                    <a asp-controller="Home" asp-action="Cyber">Cyber Game</a>
+                    <a asp-controller="Home" asp-action="Games">Game</a>
+                    <a asp-controller="Home" asp-action="Menu">MENU</a>
+                    <a asp-controller="Home" asp-action="News">Tin tức</a>
+                </div>
+                <div class="footer-col">
+                    <h3>LIÊN KẾT</h3>
+                    <a asp-controller="Home" asp-action="Index" asp-fragment="about">Về chúng tôi</a>
+                    <a href="#">Điều khoản sử dụng</a>
+                    <a href="#">Chính sách bảo mật</a>
+                    <a href="#">Thỏa thuận người dùng</a>
+                </div>
+                <div class="footer-col">
+                    <h3>LIÊN HỆ</h3>
+                    <p>131 Đường Gaming, Việt Nam</p>
+                    <a href="mailto:contact@cybergame.vn">contact@cybergame.vn</a>
+                    <a href="tel:02466565025">024 665 65025</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© 2026 Cyber Game. All rights reserved.</span>
+                <div class="social">
+                    <a href="#">FB</a>
+                    <a href="#">YT</a>
+                    <a href="#">TK</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <button class="top">↑</button>
+
+    <script src="~/js/main.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

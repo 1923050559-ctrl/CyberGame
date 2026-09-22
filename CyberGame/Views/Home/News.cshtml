@@ -1,0 +1,39 @@
+@model IEnumerable<CyberGame.Models.Entities.KnowledgeBase>
+@{
+    ViewData["Title"] = "Tin tức & Hướng dẫn game thủ";
+}
+
+<main id="newsPage">
+<section class="banner"><div class="container reveal">
+  <p class="eyebrow">NEWS & KNOWLEDGE BASE</p>
+  <h1>TIN TỨC &<br><span>HƯỚNG DẪN</span></h1>
+  <p>Cập nhật quy định, hướng dẫn đặt máy, chính sách thành viên và sự kiện mới nhất.</p>
+</div></section>
+
+<section class="light"><div class="container">
+  <div class="section-head">
+    <div><span class="num">01</span><p class="eyebrow">BÀI VIẾT & HƯỚNG DẪN</p><h2 class="title">TẤT CẢ<br><span>BÀI VIẾT</span></h2></div>
+  </div>
+  
+  <div class="news-grid" id="allNews">
+    @if (Model != null)
+    {
+        @foreach (var item in Model)
+        {
+            var snippet = item.Answer.Length > 140 ? item.Answer.Substring(0, 140) + "..." : item.Answer;
+            <article class="news-card">
+              <div class="thumb" style="background-image:url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80');height:180px;background-size:cover;background-position:center;position:relative">
+                <span class="badge" style="position:absolute;top:10px;right:10px;background:var(--blue);color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700">@item.Category</span>
+              </div>
+              <div class="body" style="padding:22px">
+                <span class="date" style="color:var(--text-muted);font-size:12px">@item.CreatedAt.ToString("dd/MM/yyyy HH:mm")</span>
+                <h3 class="title" style="font-size:17px;margin:8px 0;line-height:1.4"><a asp-controller="Home" asp-action="NewsDetail" asp-route-id="@item.KnowledgeId" style="color:#fff;text-decoration:none">@item.Question</a></h3>
+                <p class="desc" style="color:#9299a4;font-size:13px;line-height:1.6">@snippet</p>
+                <a class="more" asp-controller="Home" asp-action="NewsDetail" asp-route-id="@item.KnowledgeId" style="display:inline-block;margin-top:14px;color:var(--blue);font-size:12px;font-weight:700;text-decoration:none">ĐỌC CHI TIẾT →</a>
+              </div>
+            </article>
+        }
+    }
+  </div>
+</div></section>
+</main>
