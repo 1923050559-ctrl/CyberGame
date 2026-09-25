@@ -250,6 +250,396 @@ namespace CyberGame.Controllers
             });
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Profile(string? tab = "info")
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return RedirectToAction("Login", new { returnUrl = Url.Action("Profile", "Account", new { tab }) });
+            }
+
+            var user = await _context.Users.FindAsync(userId.Value);
+            if (user == null)
+            {
+                return RedirectToAction("Login");
+            }
+
+            var bookings = await _context.Bookings
+                .Include(b => b.Computer)
+                    .ThenInclude(c => c.Zone)
+                .Where(b => b.UserId == user.UserId)
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync();
+
+            var foodOrders = await _context.FoodOrders
+                .Include(fo => fo.FoodOrderItems)
+                    .ThenInclude(foi => foi.Food)
+                .Where(fo => fo.UserId == user.UserId)
+                .OrderByDescending(fo => fo.CreatedAt)
+                .ToListAsync();
+
+            var recharges = await _context.Recharges
+                .Include(r => r.Method)
+                .Where(r => r.UserId == user.UserId)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+
+            var transactions = await _context.WalletTransactions
+                .Where(w => w.UserId == user.UserId)
+                .OrderByDescending(w => w.CreatedAt)
+                .ToListAsync();
+
+            var paymentMethods = await _context.PaymentMethods
+                .Where(p => p.IsActive)
+                .ToListAsync();
+
+            var bookingDtos = bookings.Select(b =>
+            {
+                var duration = (b.EndTime.HasValue && b.EndTime.Value > b.StartTime)
+                    ? (b.EndTime.Value - b.StartTime).TotalHours
+                    : 2.0;
+                var zonePrice = b.Computer?.Zone?.PricePerHour ?? 10000;
+                var estCost = (decimal)duration * zonePrice;
+
+                var relFoods = foodOrders.Where(fo => fo.BookingId == b.BookingId).ToList();
+                var foodItemList = new List<string>();
+                decimal foodTotal = 0;
+                foreach (var order in relFoods)
+                {
+                    foodTotal += order.TotalAmount;
+                    foreach (var item in order.FoodOrderItems)
+                    {
+                        foodItemList.Add($"{item.Food.Name} (x{item.Quantity})");
+                    }
+                }
+
+                bool canCancel = (b.Status == "confirmed" || b.Status == "pending") && b.StartTime > DateTime.Now;
+
+                return new UserBookingDto
+                {
+                    BookingId = b.BookingId,
+                    ComputerId = b.ComputerId,
+                    ComputerName = b.Computer?.ComputerName ?? $"#{b.ComputerId}",
+                    ZoneName = b.Computer?.Zone?.ZoneName ?? "Standard",
+                    PricePerHour = zonePrice,
+                    StartTime = b.StartTime,
+                    EndTime = b.EndTime,
+                    DurationHours = Math.Round(duration, 1),
+                    EstimatedCost = estCost,
+                    Status = b.Status,
+                    CreatedAt = b.CreatedAt,
+                    CancelledAt = b.CancelledAt,
+                    CancelReason = b.CancelReason,
+                    CanCancel = canCancel,
+                    FoodItems = foodItemList,
+                    FoodTotal = foodTotal
+                };
+            }).ToList();
+
+            var rechargeDtos = recharges.Select(r => new UserRechargeDto
+            {
+                RechargeId = r.RechargeId,
+                Amount = r.Amount,
+                MethodName = r.Method?.Name ?? "Chuyển khoản QR",
+                MethodCode = r.Method?.Code ?? "BANK_QR",
+                Status = r.Status,
+                TransactionCode = r.TransactionCode ?? ("RC-" + r.RechargeId.ToString("D4")),
+                CreatedAt = r.CreatedAt
+            }).ToList();
+
+            var transDtos = transactions.Select(t =>
+            {
+                string typeDisplay = t.Type switch
+                {
+                    "recharge" => "Nạp tiền ví",
+                    "booking" => "Thanh toán đặt máy",
+                    "session_fee" => "Phí giờ chơi",
+                    "food_order" => "Gọi món F&B",
+                    "refund" => "Hoàn tiền",
+                    _ => t.Type
+                };
+                bool isPositive = t.Type == "recharge" || t.Type == "refund";
+
+                return new UserTransactionDto
+                {
+                    TransactionId = t.TransactionId,
+                    Type = t.Type,
+                    TypeDisplay = typeDisplay,
+                    Amount = t.Amount,
+                    IsPositive = isPositive,
+                    ReferenceId = t.ReferenceId,
+                    CreatedAt = t.CreatedAt
+                };
+            }).ToList();
+
+            var vm = new UserProfileViewModel
+            {
+                User = user,
+                Bookings = bookingDtos,
+                Recharges = rechargeDtos,
+                Transactions = transDtos,
+                PaymentMethods = paymentMethods,
+                TotalDeposited = recharges.Where(r => r.Status == "completed").Sum(r => r.Amount),
+                TotalSpent = transactions.Where(t => t.Type != "recharge" && t.Type != "refund").Sum(t => t.Amount),
+                TotalBookings = bookingDtos.Count,
+                ActiveTab = string.IsNullOrEmpty(tab) ? "info" : tab.ToLower()
+            };
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return Json(new { success = false, message = "Vui lòng đăng nhập." });
+            }
+
+            var user = await _context.Users.FindAsync(userId.Value);
+            if (user == null)
+            {
+                return Json(new { success = false, message = "Người dùng không tồn tại." });
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+            {
+                var cleanEmail = dto.Email.Trim();
+                var emailExists = await _context.Users.AnyAsync(u => u.Email == cleanEmail && u.UserId != user.UserId);
+                if (emailExists)
+                {
+                    return Json(new { success = false, message = "Email này đã được tài khoản khác sử dụng." });
+                }
+                user.Email = cleanEmail;
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Phone))
+            {
+                var cleanPhone = dto.Phone.Trim();
+                var phoneExists = await _context.Users.AnyAsync(u => u.Phone == cleanPhone && u.UserId != user.UserId);
+                if (phoneExists)
+                {
+                    return Json(new { success = false, message = "Số điện thoại này đã được tài khoản khác sử dụng." });
+                }
+                user.Phone = cleanPhone;
+            }
+
+            if (dto.DateOfBirth.HasValue)
+            {
+                user.DateOfBirth = dto.DateOfBirth.Value;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, message = "Cập nhật thông tin thành công!" });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return Json(new { success = false, message = "Vui lòng đăng nhập." });
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.OldPassword) || string.IsNullOrWhiteSpace(dto.NewPassword))
+            {
+                return Json(new { success = false, message = "Vui lòng nhập đầy đủ thông tin mật khẩu." });
+            }
+
+            if (dto.NewPassword.Length < 6)
+            {
+                return Json(new { success = false, message = "Mật khẩu mới phải có ít nhất 6 ký tự." });
+            }
+
+            if (dto.NewPassword != dto.ConfirmNewPassword)
+            {
+                return Json(new { success = false, message = "Xác nhận mật khẩu mới không khớp." });
+            }
+
+            var user = await _context.Users.FindAsync(userId.Value);
+            if (user == null)
+            {
+                return Json(new { success = false, message = "Người dùng không tồn tại." });
+            }
+
+            if (!VerifyPassword(dto.OldPassword, user.PasswordHash))
+            {
+                return Json(new { success = false, message = "Mật khẩu hiện tại không chính xác." });
+            }
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, message = "Đổi mật khẩu thành công! Hãy lưu nhớ mật khẩu mới của bạn." });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Deposit([FromBody] DepositRequestDto dto)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return Json(new { success = false, message = "Vui lòng đăng nhập để nạp tiền." });
+            }
+
+            if (dto.Amount < 10000)
+            {
+                return Json(new { success = false, message = "Số tiền nạp tối thiểu là 10.000 VNĐ." });
+            }
+
+            var user = await _context.Users.FindAsync(userId.Value);
+            if (user == null)
+            {
+                return Json(new { success = false, message = "Tài khoản không tồn tại." });
+            }
+
+            var method = await _context.PaymentMethods.FindAsync(dto.MethodId)
+                         ?? await _context.PaymentMethods.FirstOrDefaultAsync(p => p.Code == "BANK_QR")
+                         ?? await _context.PaymentMethods.FirstOrDefaultAsync();
+
+            int methodId = method?.MethodId ?? 1;
+            string transCode = "CG" + DateTime.UtcNow.ToString("yyMMddHHmmss") + "_" + user.UserId;
+
+            user.Balance += dto.Amount;
+
+            var recharge = new Recharge
+            {
+                UserId = user.UserId,
+                MethodId = methodId,
+                Amount = dto.Amount,
+                Status = "completed",
+                TransactionCode = transCode,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.Recharges.Add(recharge);
+            await _context.SaveChangesAsync();
+
+            var walletTrans = new WalletTransaction
+            {
+                UserId = user.UserId,
+                Type = "recharge",
+                Amount = dto.Amount,
+                ReferenceId = recharge.RechargeId,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.WalletTransactions.Add(walletTrans);
+            await _context.SaveChangesAsync();
+
+            HttpContext.Session.SetString("Balance", user.Balance.ToString());
+
+            return Json(new
+            {
+                success = true,
+                newBalance = user.Balance,
+                newBalanceFormatted = user.Balance.ToString("N0") + " đ",
+                amount = dto.Amount,
+                transactionCode = transCode,
+                methodName = method?.Name ?? "Chuyển khoản QR",
+                createdAt = recharge.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"),
+                message = $"Nạp thành công {dto.Amount:N0} đ vào tài khoản! Số dư hiện tại: {user.Balance:N0} đ"
+            });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CancelBooking([FromBody] CancelBookingDto dto)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return Json(new { success = false, message = "Vui lòng đăng nhập." });
+            }
+
+            var booking = await _context.Bookings
+                .Include(b => b.Computer)
+                .FirstOrDefaultAsync(b => b.BookingId == dto.BookingId && b.UserId == userId.Value);
+
+            if (booking == null)
+            {
+                return Json(new { success = false, message = "Không tìm thấy thông tin đặt chỗ." });
+            }
+
+            if (booking.Status == "cancelled")
+            {
+                return Json(new { success = false, message = "Đơn đặt này đã được hủy trước đó." });
+            }
+
+            if (booking.Status == "completed")
+            {
+                return Json(new { success = false, message = "Không thể hủy phiên đặt đã hoàn thành." });
+            }
+
+            booking.Status = "cancelled";
+            booking.CancelledAt = DateTime.UtcNow;
+            booking.CancelReason = string.IsNullOrWhiteSpace(dto.Reason) ? "Khách hàng hủy đặt trên website" : dto.Reason.Trim();
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                bookingId = booking.BookingId,
+                message = $"Đã hủy thành công đặt chỗ máy {booking.Computer?.ComputerName ?? ""} (Mã #{booking.BookingId})!"
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetWalletInfo()
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return Json(new { isAuthenticated = false });
+            }
+
+            var user = await _context.Users.FindAsync(userId.Value);
+            if (user == null)
+            {
+                return Json(new { isAuthenticated = false });
+            }
+
+            var recentTrans = await _context.WalletTransactions
+                .Where(w => w.UserId == user.UserId)
+                .OrderByDescending(w => w.CreatedAt)
+                .Take(5)
+                .Select(t => new
+                {
+                    t.TransactionId,
+                    t.Type,
+                    t.Amount,
+                    time = t.CreatedAt.ToLocalTime().ToString("dd/MM HH:mm")
+                })
+                .ToListAsync();
+
+            return Json(new
+            {
+                isAuthenticated = true,
+                userId = user.UserId,
+                username = user.Username,
+                balance = user.Balance,
+                balanceFormatted = user.Balance.ToString("N0") + " đ",
+                recentTransactions = recentTrans
+            });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userId = HttpContext.Session.GetInt32("UserId");
+            if (userId == null && User.Identity?.IsAuthenticated == true)
+            {
+                var claimId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(claimId, out int id))
+                {
+                    userId = id;
+                }
+            }
+            return userId;
+        }
+
         private bool VerifyPassword(string inputPassword, string storedHash)
         {
             if (string.IsNullOrEmpty(inputPassword) || string.IsNullOrEmpty(storedHash))

@@ -77,7 +77,7 @@ CREATE TABLE WALLET_TRANSACTIONS (
     reference_id INT NULL,
     created_at DATETIME NOT NULL CONSTRAINT DF_WalletTransactions_CreatedAt DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT FK_WalletTransactions_Users FOREIGN KEY (user_id) REFERENCES USERS(user_id),
-    CONSTRAINT CK_WalletTransactions_Type CHECK (type IN ('recharge', 'session_fee', 'food_order', 'refund'))
+    CONSTRAINT CK_WalletTransactions_Type CHECK (type IN ('recharge', 'session_fee', 'booking', 'food_order', 'refund'))
 );
 
 -- BẢNG 5: ZONES (Các khu vực phòng máy)
@@ -165,7 +165,7 @@ CREATE TABLE FOOD_ORDERS (
     booking_id INT NULL,
     session_id INT NULL,
     seat_label VARCHAR(20) NULL,
-    payment_method VARCHAR(30) NOT NULL CONSTRAINT DF_FoodOrders_Payment DEFAULT 'cash',
+    payment_method VARCHAR(30) NOT NULL CONSTRAINT DF_FoodOrders_Payment DEFAULT 'CASH',
     status VARCHAR(20) NOT NULL CONSTRAINT DF_FoodOrders_Status DEFAULT 'pending',
     total_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_FoodOrders_Total DEFAULT 0.00,
     created_at DATETIME NOT NULL CONSTRAINT DF_FoodOrders_CreatedAt DEFAULT CURRENT_TIMESTAMP,
@@ -174,6 +174,7 @@ CREATE TABLE FOOD_ORDERS (
     CONSTRAINT FK_FoodOrders_Bookings FOREIGN KEY (booking_id) REFERENCES BOOKINGS(booking_id),
     CONSTRAINT FK_FoodOrders_Sessions FOREIGN KEY (session_id) REFERENCES SESSIONS(session_id),
     CONSTRAINT CK_FoodOrders_Total CHECK (total_amount >= 0),
+    CONSTRAINT CK_FoodOrders_Payment CHECK (payment_method IN ('CASH', 'BANK_QR', 'WALLET')),
     CONSTRAINT CK_FoodOrders_Status CHECK (status IN ('pending', 'preparing', 'delivered', 'completed', 'cancelled'))
 );
 
@@ -279,8 +280,7 @@ GO
 INSERT INTO PAYMENT_METHODS (name, code, is_active) VALUES
 (N'Tiền mặt', 'CASH', 1),
 (N'Chuyển khoản VietQR', 'BANK_QR', 1),
-(N'Ví điện tử MoMo', 'MOMO', 1),
-(N'Thẻ ATM / Thẻ quốc tế', 'CARD', 1);
+(N'Ví CyberGame', 'WALLET', 1);
 GO
 
 -- -----------------------------------------------------------------------------
@@ -452,7 +452,7 @@ VALUES (
     NULL,
     1,
     'P01',
-    'transfer',
+    'BANK_QR',
     'preparing',
     65000.00,
     DATEADD(MINUTE, -15, CURRENT_TIMESTAMP)

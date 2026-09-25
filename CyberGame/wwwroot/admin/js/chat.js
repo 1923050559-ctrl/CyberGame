@@ -1,22 +1,25 @@
 /**
- * CYBERGAME ADMIN - MESSENGER CHAT CONTROLLER
+ * CYBERGAME ADMIN - MESSENGER CHAT CONTROLLER (Database-Backed & User-Isolated)
  * Features:
  * 1. Facebook Messenger Dark Mode Experience
- * 2. Real-time Customer & Bot Handover Inbox
- * 3. Bidirectional Synchronization with Customer Chatbot (LocalStorage & Storage Events)
+ * 2. Real-time Customer & Bot Handover Inbox (Isolated per User Session)
+ * 3. Bidirectional Synchronization via REST API & Live Polling
  * 4. Quick Admin Replies & Customer Info Drawer
  */
 
 // ==========================================================================
-// 1. DATA CONSTANTS & STORAGE INITIALIZATION
+// 1. DATA STATE & API COMMUNICATION
 // ==========================================================================
-const STORAGE_KEY_CONVERSATIONS = 'cybergame_chat_conversations_v3';
-const STORAGE_KEY_CUSTOMERS = 'cybergame_customers_v3';
+let cachedConversations = [];
+let activeConversationId = null;
+let currentFilter = 'all'; // all | waiting | unread | resolved
+let searchQuery = '';
 
 // Clear legacy fake data from localStorage
 try {
   localStorage.removeItem('cybergame_chat_conversations_v1');
   localStorage.removeItem('cybergame_chat_conversations_v2');
+  localStorage.removeItem('cybergame_chat_conversations_v3');
 } catch (e) {}
 
 // CyberGame Venue Zone & Seats Mapping
@@ -34,33 +37,32 @@ function populateSeatsByZone(zoneKey) {
   seatSelect.innerHTML = seats.map(s => `<option value="${s}">🖥️ ${s}</option>`).join('');
 }
 
-// Clean Initial State: 0 fake conversations, only real chats from workstations or clients
-const DEFAULT_CONVERSATIONS = [];
-
 function getConversations() {
-  const saved = localStorage.getItem(STORAGE_KEY_CONVERSATIONS);
-  if (!saved) {
-    saveConversations(DEFAULT_CONVERSATIONS);
-    return DEFAULT_CONVERSATIONS;
-  }
-  try {
-    return JSON.parse(saved);
-  } catch (e) {
-    return DEFAULT_CONVERSATIONS;
-  }
+  return cachedConversations;
 }
 
 function saveConversations(conversations) {
-  localStorage.setItem(STORAGE_KEY_CONVERSATIONS, JSON.stringify(conversations));
+  cachedConversations = conversations;
 }
 
-function getCustomersList() {
-  const saved = localStorage.getItem(STORAGE_KEY_CUSTOMERS);
-  if (!saved) return [];
+async function fetchConversations(isPolling = false) {
   try {
-    return JSON.parse(saved);
-  } catch (e) {
-    return [];
+    const res = await fetch('/Admin/GetAdminChatList');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      cachedConversations = data;
+      if (!activeConversationId && cachedConversations.length > 0) {
+        activeConversationId = cachedConversations[0].id;
+      }
+      renderChatList();
+      renderActiveChat();
+      if (!isPolling) {
+        renderCustomerInfoDrawer();
+      }
+    }
+  } catch (err) {
+    console.warn('Lỗi tải danh sách chat admin:', err);
   }
 }
 
@@ -89,14 +91,7 @@ function showToast(message, type = 'success') {
 }
 
 // ==========================================================================
-// 2. STATE & SELECTION
-// ==========================================================================
-let activeConversationId = null;
-let currentFilter = 'all'; // all | waiting | unread | resolved
-let searchQuery = '';
-
-// ==========================================================================
-// 3. UI RENDERING
+// 2. UI RENDERING
 // ==========================================================================
 
 function updatePendingBadges() {
@@ -164,7 +159,7 @@ function renderChatList() {
   }
 
   container.innerHTML = filtered.map(c => {
-    const isSelected = c.id === activeConversationId;
+    const isSelected = c.id == activeConversationId;
     const lastMsg = c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1] : null;
     let previewText = lastMsg ? lastMsg.text.replace(/\n/g, ' ') : 'Đoạn chat mới';
     if (lastMsg && lastMsg.sender === 'admin') previewText = `Bạn: ${previewText}`;
@@ -214,14 +209,12 @@ function renderChatList() {
 }
 
 function selectConversation(convId) {
-  activeConversationId = convId;
+  activeConversationId = parseInt(convId) || convId;
   const conversations = getConversations();
-  const conv = conversations.find(c => c.id === convId);
+  const conv = conversations.find(c => c.id == activeConversationId);
 
   if (conv) {
-    // Mark as read
     conv.unread = false;
-    saveConversations(conversations);
   }
 
   renderChatList();
@@ -231,15 +224,13 @@ function selectConversation(convId) {
 
 function renderActiveChat() {
   const messagesContainer = document.getElementById('chatMessagesStream');
-  const headerUserInfo = document.getElementById('chatHeaderUserInfo');
   const toggleResolveBtn = document.getElementById('btnToggleResolve');
   if (!messagesContainer) return;
 
   const conversations = getConversations();
-  const conv = conversations.find(c => c.id === activeConversationId);
+  const conv = conversations.find(c => c.id == activeConversationId);
 
   if (!conv) {
-    // Default to first if none selected
     if (conversations.length > 0) {
       selectConversation(conversations[0].id);
       return;
@@ -290,12 +281,9 @@ function renderActiveChat() {
   }
 
   // Render Messages
-  let streamHtml = '';
-
-  // Time Separator
-  streamHtml += `
+  let streamHtml = `
     <div class="msg-time-separator">
-      <span>ĐOẠN CHAT VỚI KHÁCH HÀNG</span>
+      <span>ĐOẠN CHAT VỚI KHÁCH HÀNG (PHIÊN #${conv.id})</span>
     </div>
   `;
 
@@ -305,7 +293,7 @@ function renderActiveChat() {
       <div class="handover-alert-banner">
         <span class="icon">⚠️</span>
         <div>
-          <strong>BOT ĐÃ CHUYỂN TIẾP CHO ADMIN:</strong>
+          <strong>BOT ĐÃ CHUYỂN TIẾP TICKET CHO ADMIN:</strong>
           <div style="margin-top: 2px;">${conv.waitingReason || 'Khách hàng có thắc mắc cần Quản Trị Viên giải đáp trực tiếp.'}</div>
         </div>
       </div>
@@ -351,8 +339,6 @@ function renderActiveChat() {
   });
 
   messagesContainer.innerHTML = streamHtml;
-
-  // Smooth scroll to bottom
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
@@ -361,7 +347,7 @@ function renderCustomerInfoDrawer() {
   if (!drawer) return;
 
   const conversations = getConversations();
-  const conv = conversations.find(c => c.id === activeConversationId);
+  const conv = conversations.find(c => c.id == activeConversationId);
   if (!conv) {
     drawer.innerHTML = `
       <div class="chat-empty-state" style="padding: 30px 10px; text-align: center;">
@@ -373,11 +359,8 @@ function renderCustomerInfoDrawer() {
     return;
   }
 
-  const allCustomers = getCustomersList();
-  const registeredCust = allCustomers.find(c => (c.email && c.email.toLowerCase() === (conv.email || '').toLowerCase()) || c.name === conv.customerName);
-
-  const balance = registeredCust ? registeredCust.balance : 0;
-  const custId = registeredCust ? registeredCust.id : 'GUEST-CH';
+  const balance = conv.balance || 0;
+  const custId = conv.userId ? `USER-#${conv.userId}` : `GUEST-#${conv.id}`;
 
   drawer.innerHTML = `
     <div class="drawer-profile-card">
@@ -393,7 +376,7 @@ function renderCustomerInfoDrawer() {
         <span>Tài Khoản Hội Viên</span>
       </div>
       <div class="drawer-data-row">
-        <span class="drawer-data-label">Mã khách hàng:</span>
+        <span class="drawer-data-label">Mã tài khoản:</span>
         <span class="drawer-data-val">${custId}</span>
       </div>
       <div class="drawer-data-row">
@@ -404,10 +387,10 @@ function renderCustomerInfoDrawer() {
         <span class="drawer-data-label">Trạng thái:</span>
         <span class="drawer-data-val" style="color: #60a5fa;">${conv.isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}</span>
       </div>
-      <button type="button" class="drawer-topup-btn" id="btnDrawerQuickTopUp">
+      <a href="/Admin/Customers" class="drawer-topup-btn" id="btnDrawerQuickTopUp" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px">
         <span>💵</span>
-        <span>Nạp Tiền Nhanh</span>
-      </button>
+        <span>Quản Lý Hội Viên</span>
+      </a>
     </div>
 
     <div class="drawer-section">
@@ -428,81 +411,65 @@ function renderCustomerInfoDrawer() {
       ` : ''}
     </div>
   `;
-
-  document.getElementById('btnDrawerQuickTopUp')?.addEventListener('click', () => {
-    window.location.href = `customers.html`;
-  });
 }
 
 // ==========================================================================
-// 4. ADMIN ACTIONS (SEND MESSAGE, QUICK REPLIES, TOGGLE RESOLVE)
+// 3. ADMIN ACTIONS (SEND MESSAGE, QUICK REPLIES, TOGGLE RESOLVE)
 // ==========================================================================
 
-function sendAdminMessage(text) {
+async function sendAdminMessage(text) {
   const cleanText = text.trim();
-  if (!cleanText) return;
+  if (!cleanText || !activeConversationId) return;
 
-  const conversations = getConversations();
-  const conv = conversations.find(c => c.id === activeConversationId);
-  if (!conv) return;
-
-  const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-  const newMsg = {
-    id: `msg_${Date.now()}`,
-    sender: 'admin',
-    text: cleanText,
-    time: timeStr,
-    date: 'Hôm nay'
-  };
-
-  if (!conv.messages) conv.messages = [];
-  conv.messages.push(newMsg);
-  conv.updatedAt = 'Vừa xong';
-  // If was waiting admin, mark as resolved or in-progress
-  conv.status = 'resolved';
-
-  saveConversations(conversations);
-  renderActiveChat();
-  renderChatList();
-  renderCustomerInfoDrawer();
-  showToast('Đã gửi phản hồi đến khách hàng!');
+  try {
+    const res = await fetch('/Admin/SendAdminReply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatSessionId: parseInt(activeConversationId),
+        content: cleanText
+      })
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      showToast('Đã gửi phản hồi đến khách hàng!');
+      await fetchConversations();
+    } else {
+      showToast(data.message || 'Lỗi khi gửi phản hồi!', 'danger');
+    }
+  } catch (err) {
+    console.error('sendAdminMessage error:', err);
+    showToast('Lỗi mạng hoặc kết nối máy chủ!', 'danger');
+  }
 }
 
-function toggleResolveStatus() {
-  const conversations = getConversations();
-  const conv = conversations.find(c => c.id === activeConversationId);
-  if (!conv) return;
+async function toggleResolveStatus() {
+  if (!activeConversationId) return;
 
-  if (conv.status === 'waiting_admin') {
-    conv.status = 'resolved';
-    showToast(`Đã đánh dấu giải quyết xong cho ${conv.customerName}!`);
-  } else {
-    conv.status = 'waiting_admin';
-    showToast(`Đã chuyển ${conv.customerName} sang mục Chờ Admin xử lý!`, 'danger');
+  try {
+    const res = await fetch('/Admin/ToggleTicketStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatSessionId: parseInt(activeConversationId)
+      })
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      showToast(data.message);
+      await fetchConversations();
+    }
+  } catch (err) {
+    console.error('toggleResolveStatus error:', err);
   }
-
-  saveConversations(conversations);
-  renderActiveChat();
-  renderChatList();
-  renderCustomerInfoDrawer();
 }
 
 // ==========================================================================
-// 5. INITIALIZATION & EVENT BINDINGS
+// 4. INITIALIZATION & EVENT BINDINGS
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize storage
-  const conversations = getConversations();
-  if (conversations.length > 0) {
-    activeConversationId = conversations[0].id;
-  }
-
-  renderChatList();
-  renderActiveChat();
-  renderCustomerInfoDrawer();
+document.addEventListener('DOMContentLoaded', async () => {
+  await fetchConversations();
 
   // Search Input
   const searchInput = document.getElementById('searchChatInput');
@@ -565,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
           sendBtn.innerHTML = '👍';
         }
       } else {
-        // Send thumbs up
         sendAdminMessage('👍');
       }
     });
@@ -613,10 +579,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Refresh Chat
-  document.getElementById('btnRefreshChat')?.addEventListener('click', () => {
-    renderChatList();
-    renderActiveChat();
-    renderCustomerInfoDrawer();
+  document.getElementById('btnRefreshChat')?.addEventListener('click', async () => {
+    await fetchConversations();
     showToast('Đã làm mới danh sách tin nhắn!');
   });
 
@@ -649,73 +613,40 @@ document.addEventListener('DOMContentLoaded', () => {
   // Form Create New Chat (Send message directly to selected machine)
   const formNewChat = document.getElementById('formCreateNewChat');
   if (formNewChat) {
-    formNewChat.addEventListener('submit', (e) => {
+    formNewChat.addEventListener('submit', async (e) => {
       e.preventDefault();
       const selectedSeat = document.getElementById('newChatSeatSelect').value;
       const initialMsg = document.getElementById('newChatInitialMsg').value.trim();
       if (!initialMsg) return;
 
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const newMsg = {
-        id: `msg_${Date.now()}`,
-        sender: 'admin',
-        text: initialMsg,
-        time: timeStr,
-        date: 'Hôm nay'
-      };
+      try {
+        const res = await fetch('/Admin/CreateDirectChat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            seat: selectedSeat,
+            content: initialMsg
+          })
+        });
 
-      const conversations = getConversations();
-      // Check if conversation for this machine already exists
-      let conv = conversations.find(c => c.seat === selectedSeat);
-
-      if (conv) {
-        if (!conv.messages) conv.messages = [];
-        conv.messages.push(newMsg);
-        conv.updatedAt = 'Vừa xong';
-        conv.status = 'resolved';
-        activeConversationId = conv.id;
-      } else {
-        const newId = `conv_seat_${selectedSeat.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
-        const seatCode = selectedSeat.split(' ').pop(); // e.g. "V02", "S15"
-        const newConv = {
-          id: newId,
-          customerName: `Khách ${selectedSeat}`,
-          email: '',
-          seat: selectedSeat,
-          avatarText: seatCode,
-          isOnline: true,
-          status: 'resolved',
-          unread: false,
-          updatedAt: 'Vừa xong',
-          messages: [newMsg]
-        };
-        conversations.unshift(newConv);
-        activeConversationId = newId;
+        const data = await res.json();
+        if (data && data.success) {
+          if (data.sessionId) activeConversationId = data.sessionId;
+          await fetchConversations();
+          if (modalNewChat) modalNewChat.classList.remove('show');
+          showToast(`Đã gửi tin nhắn tới ${selectedSeat}!`);
+        } else {
+          showToast(data.message || 'Lỗi khi tạo tin nhắn!', 'danger');
+        }
+      } catch (err) {
+        console.error('CreateDirectChat error:', err);
+        showToast('Lỗi kết nối máy chủ!', 'danger');
       }
-
-      saveConversations(conversations);
-      renderChatList();
-      renderActiveChat();
-      renderCustomerInfoDrawer();
-
-      if (modalNewChat) modalNewChat.classList.remove('show');
-      showToast(`Đã gửi tin nhắn tới ${selectedSeat}!`);
     });
   }
 
-  // ========================================================================
-  // 6. REAL-TIME STORAGE EVENT & POLLING SYNC (FROM CLIENT CHATBOT)
-  // ========================================================================
-  window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEY_CONVERSATIONS) {
-      renderChatList();
-      renderActiveChat();
-    }
-  });
-
-  // Periodic check every 2 seconds in case changes occur in other windows
+  // Periodic polling check every 3 seconds for real-time ticket & message synchronization
   setInterval(() => {
-    updatePendingBadges();
-  }, 2000);
+    fetchConversations(true);
+  }, 3000);
 });
