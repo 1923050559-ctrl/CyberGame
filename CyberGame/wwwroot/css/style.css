@@ -60,6 +60,12 @@ footer{background:#07080a;border-top:1px solid var(--line);padding-top:70px}.foo
 .chat-send { background: var(--blue); border: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; cursor: pointer; transition: 0.2s; }
 .chat-send:hover { background: #4b91ff; }
 
+@keyframes pulse-dot {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 14px rgba(147, 51, 234, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(147, 51, 234, 0); }
+}
+
 @media(max-width: 720px) {
   .booking-grid { grid-template-columns: 1fr; }
   .booking-illustration { display: none; }

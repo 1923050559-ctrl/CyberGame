@@ -51,6 +51,13 @@
         <span>Giỏ hàng của bạn</span> 
         <span id="cartCount" style="background:var(--blue);color:#fff;border-radius:20px;padding:2px 10px;font-size:12px">0</span>
       </h3>
+
+      @if (User.Identity?.IsAuthenticated != true)
+      {
+          <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:10px 12px;border-radius:8px;font-size:12px;color:#fca5a5;margin-bottom:15px;line-height:1.5">
+              🔒 <strong>Lưu ý:</strong> Vui lòng <a asp-controller="Account" asp-action="Login" asp-route-returnUrl="/Home/Menu" style="color:var(--blue);text-decoration:underline;font-weight:700">Đăng nhập</a> để đặt món mang đến tận máy.
+          </div>
+      }
       
       <div class="form-group" style="margin-bottom:20px">
         <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--text-muted)">Vị trí máy đang ngồi <span style="color:#ef4444">*</span></label>
@@ -186,6 +193,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Checkout
     document.getElementById("btnCheckout").addEventListener("click", async function() {
+        if (typeof window.checkAuthOrPrompt === "function" && !window.checkAuthOrPrompt("đặt món", "/Home/Menu")) {
+            return;
+        }
+
         if (cart.length === 0) {
             alert("Vui lòng chọn ít nhất 1 món vào giỏ hàng.");
             return;
@@ -215,6 +226,15 @@ document.addEventListener("DOMContentLoaded", function() {
             });
 
             const data = await res.json();
+            if (data.requireLogin) {
+                if (typeof window.checkAuthOrPrompt === "function") {
+                    window.checkAuthOrPrompt("đặt món", "/Home/Menu");
+                } else {
+                    window.location.href = "/Account/Login?returnUrl=/Home/Menu";
+                }
+                return;
+            }
+
             if (data.success) {
                 cart = [];
                 renderCart();

@@ -727,19 +727,21 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateChatNavBadge, 2500);
 });
 
-function updateChatNavBadge() {
+async function updateChatNavBadge() {
   const badge = document.getElementById('navChatPendingBadge');
   if (!badge) return;
-  const raw = localStorage.getItem('cybergame_chat_conversations_v1');
-  if (!raw) return;
   try {
-    const convs = JSON.parse(raw);
-    const count = convs.filter(c => c.status === 'waiting_admin').length;
-    if (count > 0) {
-      badge.textContent = count;
-      badge.style.display = 'inline-flex';
-    } else {
-      badge.style.display = 'none';
+    const res = await fetch('/Admin/GetAdminChatList');
+    if (!res.ok) return;
+    const convs = await res.json();
+    if (Array.isArray(convs)) {
+      const count = convs.filter(c => c.status === 'waiting_admin').length;
+      if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = 'inline-flex';
+      } else {
+        badge.style.display = 'none';
+      }
     }
   } catch (e) {}
 }

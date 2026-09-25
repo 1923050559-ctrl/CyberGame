@@ -120,9 +120,27 @@
                 </div>
             }
         </div>
+    <!-- MODAL YÊU CẦU ĐĂNG NHẬP -->
+    <div class="modal" id="loginRequiredModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center">
+        <div class="modal-box" style="background:#14171d;border:1px solid var(--line);border-radius:12px;padding:35px 25px;max-width:440px;width:90%;text-align:center;position:relative">
+            <button class="close" data-close-login-req style="position:absolute;top:15px;right:20px;background:none;border:none;color:#fff;font-size:22px;cursor:pointer">×</button>
+            <p class="eyebrow" style="color:#ef4444">YÊU CẦU ĐĂNG NHẬP</p>
+            <h2 style="font-size:24px;margin:10px 0 12px;color:#fff" id="loginReqTitle">BẠN CHƯA ĐĂNG NHẬP</h2>
+            <p style="color:#9097a1;font-size:14px;line-height:1.6;margin-bottom:25px" id="loginReqMessage">Vui lòng đăng nhập tài khoản CyberGame để thực hiện đặt máy hoặc gọi món trực tuyến.</p>
+            <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+                <a href="/Account/Login" id="loginReqBtn" class="btn blue" style="min-height:44px;padding:0 24px;font-size:13px;font-weight:800;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;flex:1">ĐĂNG NHẬP NGAY</a>
+                <a href="/Account/Register" id="registerReqBtn" class="btn outline" style="min-height:44px;padding:0 20px;font-size:13px;font-weight:700;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;flex:1">ĐĂNG KÝ</a>
+            </div>
+        </div>
     </div>
+
     <button class="top">↑</button>
 
+    <script>
+        window.IS_AUTHENTICATED = @(User.Identity?.IsAuthenticated == true ? "true" : "false");
+        window.CURRENT_USER_ID = @(User.Identity?.IsAuthenticated == true ? (User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0") : "0");
+        window.CURRENT_USERNAME = "@(User.Identity?.IsAuthenticated == true ? (User.Identity.Name ?? "") : "")";
+    </script>
     <script src="~/js/main.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

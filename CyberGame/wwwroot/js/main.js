@@ -154,19 +154,35 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
   
-  const zone = DATA.zones.find(z => z.id === zoneId);
-  const totalSeats = zone.max;
+  const zone = DATA.zones.find(z => z.id == zoneId);
+  if (!zone) return;
+  const totalSeats = zone.max || (zone.computers ? zone.computers.length : 40);
   
   let seatsHTML = '';
-  for(let i=1; i<=totalSeats; i++) {
-    let status = 'available';
-    let seatLabel = zone.prefix + i.toString().padStart(2, '0');
-    
-    if(chosenSeats.includes(seatLabel)) {
-      status += ' selected';
+  if (zone.computers && zone.computers.length > 0) {
+    zone.computers.forEach(comp => {
+      let isAvailable = comp.status === 'available';
+      let status = isAvailable ? 'available' : 'inuse';
+      let seatLabel = comp.name;
+      
+      if (chosenSeats.includes(seatLabel)) {
+        status += ' selected';
+      }
+      
+      let title = isAvailable ? `Máy ${seatLabel} (Rảnh)` : (comp.status === 'maintenance' ? `Máy ${seatLabel} (Bảo trì)` : `Máy ${seatLabel} (Đang sử dụng)`);
+      seatsHTML += `<div class="seat ${status}" data-id="${seatLabel}" data-comp-id="${comp.id}" title="${title}">${seatLabel}</div>`;
+    });
+  } else {
+    for(let i=1; i<=totalSeats; i++) {
+      let status = 'available';
+      let seatLabel = (zone.prefix || 'M') + i.toString().padStart(2, '0');
+      
+      if(chosenSeats.includes(seatLabel)) {
+        status += ' selected';
+      }
+      
+      seatsHTML += `<div class="seat ${status}" data-id="${seatLabel}">${seatLabel}</div>`;
     }
-    
-    seatsHTML += `<div class="seat ${status}" data-id="${seatLabel}">${seatLabel}</div>`;
   }
   
   wrap.innerHTML = `
@@ -269,6 +285,42 @@ window.updateFoodQty = function(input) {
   document.querySelector("#bDuration").dispatchEvent(new Event('input'));
 };
 
+window.checkAuthOrPrompt = function(actionDesc, returnUrl) {
+  if (window.IS_AUTHENTICATED) {
+    return true;
+  }
+  
+  const modal = document.getElementById("loginRequiredModal");
+  const targetUrl = returnUrl || (window.location.pathname + window.location.search);
+  const loginUrl = "/Account/Login?returnUrl=" + encodeURIComponent(targetUrl);
+  const registerUrl = "/Account/Register?returnUrl=" + encodeURIComponent(targetUrl);
+  
+  if (modal) {
+    const titleEl = modal.querySelector("#loginReqTitle");
+    const msgEl = modal.querySelector("#loginReqMessage");
+    const btnEl = modal.querySelector("#loginReqBtn");
+    const regBtnEl = modal.querySelector("#registerReqBtn");
+    
+    if (titleEl) titleEl.textContent = actionDesc ? `ĐĂNG NHẬP ĐỂ ${actionDesc.toUpperCase()}` : "BẠN CHƯA ĐĂNG NHẬP";
+    if (msgEl) msgEl.textContent = actionDesc ? `Bạn cần đăng nhập tài khoản CyberGame để ${actionDesc}. Vui lòng đăng nhập hoặc tạo tài khoản mới.` : "Vui lòng đăng nhập tài khoản CyberGame để tiếp tục.";
+    if (btnEl) btnEl.href = loginUrl;
+    if (regBtnEl) regBtnEl.href = registerUrl;
+    
+    modal.style.display = "flex";
+    modal.querySelectorAll("[data-close-login-req]").forEach(x => {
+      x.onclick = () => modal.style.display = "none";
+    });
+    modal.onclick = (e) => {
+      if (e.target === modal) modal.style.display = "none";
+    };
+  } else {
+    if (confirm(`Bạn cần đăng nhập tài khoản để ${actionDesc || 'tiếp tục'}. Đi tới trang Đăng nhập ngay?`)) {
+      window.location.href = loginUrl;
+    }
+  }
+  return false;
+};
+
 const DRAFT_STORAGE_KEY = 'cybergame_booking_draft';
 
 function renderBookingPage() {
@@ -290,6 +342,13 @@ function renderBookingPage() {
   
   if(!zoneSelect) return;
 
+  if (window.DB_ZONES && window.DB_ZONES.length > 0) {
+    DATA.zones = window.DB_ZONES;
+  }
+  if (window.DB_FOODS && window.DB_FOODS.length > 0) {
+    DATA.menu = window.DB_FOODS;
+  }
+
   let lastZone = "";
   let isSelectingZone = false;
 
@@ -298,7 +357,7 @@ function renderBookingPage() {
     menuList.innerHTML = DATA.menu.map(m => `
       <div style="display:flex;justify-content:space-between;align-items:center;background:#232830;padding:10px;border-radius:6px">
         <div style="display:flex;align-items:center;gap:10px">
-          <img src="${m.image}" style="width:40px;height:40px;border-radius:4px;object-fit:cover">
+          <img src="${m.image || m.imageUrl || 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&w=400&q=80'}" style="width:40px;height:40px;border-radius:4px;object-fit:cover">
           <div>
             <div style="font-size:13px;font-weight:600">${m.name}</div>
             <div style="font-size:11px;color:var(--blue)">${m.price.toLocaleString('vi-VN')} đ</div>
@@ -333,7 +392,9 @@ function renderBookingPage() {
     });
   }
   
-  zoneSelect.innerHTML = `<option value="">-- Chọn khu vực --</option>` + DATA.zones.map(z => `<option value="${z.id}" data-price="${z.price}">${z.name} - ${z.price.toLocaleString('vi-VN')}đ/h</option>`).join("");
+  if (zoneSelect.options.length <= 1) {
+    zoneSelect.innerHTML = `<option value="">-- Chọn khu vực --</option>` + DATA.zones.map(z => `<option value="${z.id}" data-price="${z.price}">${z.name} - ${z.price.toLocaleString('vi-VN')}đ/h</option>`).join("");
+  }
 
   // Modal handlers
   if(seatModal) {
@@ -584,61 +645,170 @@ function renderBookingPage() {
     if(sSeat) sSeat.onclick = openSeatModalHandler;
   }
   
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!window.checkAuthOrPrompt("đặt máy", window.location.pathname + window.location.search)) {
+      return;
+    }
     const peopleCount = parseInt(peopleInput?.value) || 1;
     if(chosenSeats.length !== peopleCount) {
       alert(`Vui lòng chọn đủ ${peopleCount} máy rảnh trên sơ đồ tương ứng với số người!`);
+      if(seatModal && zoneSelect.value) {
+        seatModal.classList.add("open");
+      }
       return;
     }
-    
-    function showSuccess() {
-      // Xác nhận thanh toán/đặt máy thành công -> Xóa dữ liệu tạm thời và reset form
-      clearBookingDraft();
-      const modal = document.querySelector("#bookingSuccessModal");
-      if(modal) {
-        modal.classList.add("open");
-        modal.querySelectorAll("[data-close-success]").forEach(x => {
-          x.onclick = () => {
-            modal.classList.remove("open");
-          };
+
+    const name = nameInput ? nameInput.value.trim() : '';
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    const zoneVal = parseInt(zoneSelect.value) || zoneSelect.value;
+    const dtVal = dateTimeInput ? dateTimeInput.value : '';
+    const durVal = parseInt(durationInput?.value) || 2;
+    const paymentVal = paymentSelect ? paymentSelect.value : 'counter';
+
+    // Map chosenSeats to computer IDs
+    const curZone = DATA.zones.find(z => z.id == zoneVal);
+    const chosenCompIds = [];
+    if (curZone && curZone.computers) {
+      chosenSeats.forEach(sName => {
+        const found = curZone.computers.find(c => c.name === sName);
+        if (found) chosenCompIds.push(found.id);
+      });
+    }
+
+    const foodItems = Object.keys(chosenFood).map(fid => ({
+      foodId: parseInt(fid) || 0,
+      name: chosenFood[fid].name,
+      price: chosenFood[fid].price,
+      quantity: chosenFood[fid].qty
+    }));
+
+    const submitBtn = document.querySelector("#bSubmitBtn");
+
+    async function doSubmit() {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Đang xử lý...";
+      }
+
+      try {
+        let startTimeIso = new Date().toISOString();
+        if (dtVal) {
+          try {
+            startTimeIso = new Date(dtVal.replace(" ", "T")).toISOString();
+          } catch(err) {
+            startTimeIso = new Date().toISOString();
+          }
+        }
+
+        const payload = {
+          customerName: name,
+          phone: phone,
+          numberOfPeople: peopleCount,
+          zoneId: typeof zoneVal === 'number' ? zoneVal : (parseInt(zoneVal) || 1),
+          computerNames: chosenSeats,
+          computerIds: chosenCompIds,
+          computerId: chosenCompIds[0] || null,
+          startTime: startTimeIso,
+          durationHours: durVal,
+          paymentMethod: paymentVal,
+          foodItems: foodItems
+        };
+
+        const res = await fetch("/Home/CreateBooking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
-      } else {
-        alert("Đặt máy thành công! Cảm ơn bạn.");
+
+        const data = await res.json();
+        if (data.requireLogin) {
+          window.checkAuthOrPrompt("đặt máy", window.location.pathname + window.location.search);
+          return;
+        }
+        if (data.success) {
+          clearBookingDraft();
+          const modal = document.querySelector("#bookingSuccessModal");
+          if(modal) {
+            const idEl = modal.querySelector("#successBookingId");
+            if (idEl) idEl.textContent = "MÃ ĐẶT CHỖ: #" + data.bookingId;
+            
+            const detailEl = modal.querySelector("#successBookingDetails") || modal.querySelector("#successBookingInfo");
+            if (detailEl) {
+              detailEl.innerHTML = `
+                Máy chỉ định: <strong style="color:var(--blue)">${data.computerName || chosenSeats.join(', ')}</strong><br>
+                Thời gian: <strong>${data.startTime} - ${data.endTime}</strong><br>
+                <span style="font-size:13px;color:#9097a1">${data.message || 'Hệ thống đã giữ máy cho bạn.'}</span>
+              `;
+            }
+            modal.classList.add("open");
+            modal.querySelectorAll("[data-close-success]").forEach(x => {
+              x.onclick = () => {
+                modal.classList.remove("open");
+                location.reload();
+              };
+            });
+          } else {
+            alert(data.message || "Đặt máy thành công! Cảm ơn bạn.");
+            location.reload();
+          }
+        } else {
+          alert(data.message || "Đặt chỗ thất bại. Vui lòng thử lại.");
+        }
+      } catch (err) {
+        alert("Lỗi khi kết nối tới máy chủ: " + err.message);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "XÁC NHẬN ĐẶT CHỖ";
+        }
       }
     }
 
-    const paymentMethod = document.querySelector("#bPayment").value;
-    if (paymentMethod === 'transfer') {
+    if (paymentVal === 'transfer' || paymentVal === 'BANK_QR' || paymentVal === 'MOMO') {
       const qrModal = document.querySelector("#qrModal");
       if(qrModal) {
-        const totalText = summaryBox.querySelector(".summary-total span:last-child").textContent;
-        qrModal.querySelector("#qrTotalAmount").textContent = totalText;
+        const totalText = summaryBox.querySelector(".summary-total span:last-child")?.textContent || "0 VNĐ";
+        const qrAmountEl = qrModal.querySelector("#qrTotalAmount");
+        if (qrAmountEl) qrAmountEl.textContent = totalText;
         qrModal.classList.add("open");
         
-        qrModal.querySelector("#btnConfirmPayment").onclick = () => {
-          qrModal.classList.remove("open");
-          showSuccess();
-        };
+        const confirmBtn = qrModal.querySelector("#btnConfirmPayment");
+        if (confirmBtn) {
+          confirmBtn.onclick = () => {
+            qrModal.classList.remove("open");
+            doSubmit();
+          };
+        }
         qrModal.querySelectorAll("[data-close-qr]").forEach(btn => {
           btn.onclick = () => qrModal.classList.remove("open");
         });
       } else {
-        showSuccess();
+        doSubmit();
       }
     } else {
-      showSuccess();
+      doSubmit();
     }
   });
 }
 
 function setupChatbot() {
-  const STORAGE_CHAT_KEY = 'cybergame_chat_conversations_v3';
-  const CLIENT_CHAT_SESSION_KEY = 'cybergame_current_client_chat_id';
-  let clientChatId = localStorage.getItem(CLIENT_CHAT_SESSION_KEY);
-  if (!clientChatId) {
-    clientChatId = 'conv_web_' + Date.now().toString().slice(-6);
-    localStorage.setItem(CLIENT_CHAT_SESSION_KEY, clientChatId);
+  // Purge legacy shared localStorage to avoid cross-user leaking
+  try {
+    localStorage.removeItem('cybergame_chat_conversations_v1');
+    localStorage.removeItem('cybergame_chat_conversations_v2');
+    localStorage.removeItem('cybergame_chat_conversations_v3');
+    localStorage.removeItem('cybergame_current_client_chat_id');
+  } catch (e) {}
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   const html = `
@@ -652,7 +822,12 @@ function setupChatbot() {
           <button class="chat-close" id="chatClose">×</button>
         </div>
         <div class="chat-body" id="chatBody">
-          <div class="msg bot">Chào bạn! Tôi là trợ lý AI của CyberGame. Bạn cần hỗ trợ gì về giá máy, cấu hình hay đặt chỗ? Nếu cần gặp người hỗ trợ, cứ nhắn cho mình nhé!</div>
+          <div class="msg bot">Chào bạn! Tôi là trợ lý AI của CyberGame. Bạn cần hỗ trợ gì về giá máy, cấu hình hay đặt chỗ? Nếu cần gặp Admin hoặc gửi ticket, bạn cứ nhắn trực tiếp nhé!</div>
+          <div class="chat-quick-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px">
+            <button type="button" class="chat-chip" data-quick-msg="Bảng giá phòng máy" style="background:#1e293b;border:1px solid #334155;color:#94a3b8;font-size:11px;padding:4px 9px;border-radius:12px;cursor:pointer">💰 Bảng giá</button>
+            <button type="button" class="chat-chip" data-quick-msg="Cấu hình dàn máy" style="background:#1e293b;border:1px solid #334155;color:#94a3b8;font-size:11px;padding:4px 9px;border-radius:12px;cursor:pointer">🖥️ Cấu hình</button>
+            <button type="button" class="chat-chip" data-quick-ticket="true" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;font-size:11px;padding:4px 9px;border-radius:12px;cursor:pointer">🎫 Gửi Ticket cho Admin</button>
+          </div>
         </div>
         <form class="chat-foot" id="chatForm">
           <input type="text" class="chat-input" id="chatInput" placeholder="Nhập tin nhắn..." autocomplete="off">
@@ -673,156 +848,165 @@ function setupChatbot() {
   const chatBody = document.getElementById('chatBody');
 
   const renderedMsgIds = new Set();
+  let isFirstLoad = true;
   
   chatBtn.addEventListener('click', () => {
     widget.classList.toggle('open');
     chatBtn.style.animation = 'none';
+    chatBody.scrollTop = chatBody.scrollHeight;
   });
   chatClose.addEventListener('click', () => widget.classList.remove('open'));
 
-  // Load existing chat history from storage if available
-  function syncMessagesFromStorage() {
-    const raw = localStorage.getItem(STORAGE_CHAT_KEY);
-    if (!raw) return;
-    try {
-      const convs = JSON.parse(raw);
-      const conv = convs.find(c => c.id === clientChatId);
-      if (!conv || !conv.messages) return;
+  // Xử lý click các nút gợi ý nhanh (Quick Chips)
+  chatBody.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chat-chip');
+    if (!chip) return;
 
-      conv.messages.forEach(m => {
-        if (!renderedMsgIds.has(m.id)) {
-          renderedMsgIds.add(m.id);
-          if (m.sender === 'admin') {
-            const formatted = m.text.replace(/\n/g, '<br>');
+    if (chip.dataset.quickTicket) {
+      if (!window.IS_AUTHENTICATED) {
+        if (typeof window.checkAuthOrPrompt === 'function') {
+          window.checkAuthOrPrompt('gửi ticket cho admin hỗ trợ');
+        }
+        return;
+      }
+      chatInput.value = 'Tôi cần gửi ticket hỗ trợ kỹ thuật tới Quản Trị Viên';
+      chatForm.dispatchEvent(new Event('submit'));
+    } else if (chip.dataset.quickMsg) {
+      chatInput.value = chip.dataset.quickMsg;
+      chatForm.dispatchEvent(new Event('submit'));
+    }
+  });
+
+  // Đồng bộ tin nhắn độc quyền từ Server theo tài khoản người dùng
+  async function syncMessagesFromServer() {
+    try {
+      const res = await fetch('/Home/GetChatHistory');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || !data.success) return;
+
+      const messages = data.messages || [];
+      let hasNewStaffMsg = false;
+
+      messages.forEach(m => {
+        if (!renderedMsgIds.has(m.messageId)) {
+          renderedMsgIds.add(m.messageId);
+
+          if (m.sender === 'user') {
+            chatBody.insertAdjacentHTML('beforeend', `<div class="msg user">${escapeHtml(m.content)}</div>`);
+          } else if (m.sender === 'staff') {
+            const formatted = escapeHtml(m.content).replace(/\n/g, '<br>');
             chatBody.insertAdjacentHTML('beforeend', `
               <div class="msg admin">
                 <div class="msg-admin-header">👑 Quản Trị Viên</div>
                 ${formatted}
               </div>
             `);
-            chatBody.scrollTop = chatBody.scrollHeight;
-            if (!widget.classList.contains('open')) {
-              chatBtn.style.animation = 'pulse-dot 1.2s infinite';
+            if (!isFirstLoad) {
+              hasNewStaffMsg = true;
             }
+          } else {
+            // bot message
+            chatBody.insertAdjacentHTML('beforeend', `<div class="msg bot">${m.content}</div>`);
           }
         }
       });
-    } catch (e) {}
+
+      // Hiển thị hoặc ẩn thông báo ticket chờ Admin phản hồi
+      const existingNotice = document.getElementById('chatHandoverNotice');
+      if (data.hasTicket && data.ticketStatus === 'open') {
+        if (!existingNotice) {
+          chatBody.insertAdjacentHTML('beforeend', `
+            <div class="chat-handover-notice" id="chatHandoverNotice">
+              ⚠️ Đã kết nối với Quản Trị Viên • Đang chờ nhân viên trả lời...
+            </div>
+          `);
+        }
+      } else {
+        if (existingNotice && data.ticketStatus !== 'open') {
+          existingNotice.remove();
+        }
+      }
+
+      if (messages.length > 0) {
+        chatBody.scrollTop = chatBody.scrollHeight;
+      }
+
+      // Nếu có tin nhắn mới từ Admin và hộp chat đang đóng, nháy nút để thông báo cho riêng người dùng này
+      if (hasNewStaffMsg && !widget.classList.contains('open')) {
+        chatBtn.style.animation = 'pulse-dot 1.2s infinite';
+      }
+
+      isFirstLoad = false;
+    } catch (err) {
+      console.warn('GetChatHistory error:', err);
+    }
   }
 
-  // Initial sync
-  syncMessagesFromStorage();
+  // Khởi tạo tải tin nhắn của người dùng hiện tại
+  syncMessagesFromServer();
 
-  // Storage listener for live incoming admin replies
-  window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_CHAT_KEY) {
-      syncMessagesFromStorage();
-    }
-  });
-
-  // Polling check every 1.5 seconds
-  setInterval(syncMessagesFromStorage, 1500);
+  // Polling chu kỳ 2.5s để nhận phản hồi từ Admin theo thời gian thực
+  setInterval(syncMessagesFromServer, 2500);
   
-  chatForm.addEventListener('submit', (e) => {
+  chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const txt = chatInput.value.trim();
-    if(!txt) return;
-    
-    // 1. Show user message in chat
-    const userMsgId = 'msg_user_' + Date.now();
-    renderedMsgIds.add(userMsgId);
-    chatBody.insertAdjacentHTML('beforeend', `<div class="msg user">${txt}</div>`);
+    if (!txt) return;
+
     chatInput.value = '';
+
+    // Hiển thị tin nhắn người dùng ngay lập tức
+    chatBody.insertAdjacentHTML('beforeend', `<div class="msg user">${escapeHtml(txt)}</div>`);
     chatBody.scrollTop = chatBody.scrollHeight;
 
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-    // 2. Update conversation record in storage
-    let raw = localStorage.getItem(STORAGE_CHAT_KEY);
-    let convs = [];
     try {
-      convs = raw ? JSON.parse(raw) : [];
-    } catch(err) {
-      convs = [];
-    }
-
-    let conv = convs.find(c => c.id === clientChatId);
-    if (!conv) {
-      conv = {
-        id: clientChatId,
-        customerName: 'Khách Trực Tuyến (Web)',
-        email: '',
-        seat: 'Website Khách',
-        avatarText: 'KH',
-        isOnline: true,
-        status: 'bot_active',
-        unread: true,
-        updatedAt: 'Vừa xong',
-        messages: []
-      };
-      convs.unshift(conv);
-    }
-
-    conv.isOnline = true;
-    conv.updatedAt = 'Vừa xong';
-    if (!conv.messages) conv.messages = [];
-    conv.messages.push({
-      id: userMsgId,
-      sender: 'customer',
-      text: txt,
-      time: timeStr,
-      date: 'Hôm nay'
-    });
-    
-    // 3. Process Bot Logic or Fallback Handover to Admin
-    setTimeout(() => {
-      const lower = txt.toLowerCase();
-      let reply = null;
-      let isHandover = false;
-
-      // Rule-based automatic bot knowledge
-      if (lower.includes("giá") || lower.includes("bao nhiêu") || lower.includes("tiền") || lower.includes("bảng giá")) {
-        reply = "Giá phòng Standard là 10k/h, VIP là 15k/h, Pro Stage là 20k/h và Stream Room là 35k/h bạn nhé!";
-      } else if (lower.includes("đặt") || lower.includes("booking") || lower.includes("giữ chỗ")) {
-        reply = "Bạn có thể truy cập mục ĐẶT MÁY trên thanh menu hoặc click <a href='/Home/Booking' style='color:#64a9ff;text-decoration:underline'>vào đây</a> để đặt chỗ nhé.";
-      } else if (lower.includes("cấu hình") || lower.includes("máy") || lower.includes("gear") || lower.includes("màn hình")) {
-        reply = "Hệ thống CyberGame sử dụng Card đồ họa RTX 3060 - 4080, Màn hình 144Hz - 240Hz, cùng chuột và phím cơ Logitech/Razer cao cấp.";
-      } else if (lower.includes("chào") || lower.includes("hello") || lower.includes("hi")) {
-        reply = "Chào bạn! Mình có thể hỗ trợ gì về dịch vụ máy, nạp tiền hay đồ ăn cho bạn?";
-      } else {
-        // FALLBACK: Bot cannot answer -> Handover to Admin!
-        isHandover = true;
-        reply = "🤖 Thắc mắc này nằm ngoài câu trả lời tự động của Bot. Tôi đã chuyển đoạn chat này đến Quản Trị Viên / Thu Ngân trực ban. Nhân viên sẽ hỗ trợ trực tiếp cho bạn ngay tại đây!";
-      }
-
-      const botMsgId = 'msg_bot_' + Date.now();
-      renderedMsgIds.add(botMsgId);
-      chatBody.insertAdjacentHTML('beforeend', `<div class="msg bot">${reply}</div>`);
-
-      if (isHandover) {
-        chatBody.insertAdjacentHTML('beforeend', `
-          <div class="chat-handover-notice">
-            ⚠️ Đã kết nối với Quản Trị Viên • Đang chờ nhân viên trả lời...
-          </div>
-        `);
-        conv.status = 'waiting_admin';
-        conv.unread = true;
-        conv.waitingReason = `Khách hỏi: "${txt.slice(0, 80)}"`;
-      }
-
-      conv.messages.push({
-        id: botMsgId,
-        sender: 'bot',
-        text: reply,
-        time: timeStr,
-        date: 'Hôm nay',
-        isHandover: isHandover
+      const res = await fetch('/Home/SendChatMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ content: txt })
       });
 
-      localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(convs));
-      chatBody.scrollTop = chatBody.scrollHeight;
-    }, 600);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.success) {
+        if (data.userMessage) {
+          renderedMsgIds.add(data.userMessage.messageId);
+        }
+        if (data.botMessage) {
+          renderedMsgIds.add(data.botMessage.messageId);
+          chatBody.insertAdjacentHTML('beforeend', `<div class="msg bot">${data.botMessage.content}</div>`);
+        }
+
+        // Nếu hệ thống yêu cầu đăng nhập để gửi ticket cho admin
+        if (data.requireLogin) {
+          chatBody.insertAdjacentHTML('beforeend', `
+            <div class="chat-login-prompt" style="background:#14171d;border:1px dashed #ef4444;border-radius:10px;padding:12px;margin:8px 0;text-align:center">
+              <div style="font-weight:700;color:#ef4444;margin-bottom:6px;font-size:13px">🔐 YÊU CẦU ĐĂNG NHẬP</div>
+              <div style="font-size:12px;color:#9097a1;line-height:1.5;margin-bottom:10px">Bạn cần đăng nhập tài khoản CyberGame để tạo Ticket gửi Quản Trị Viên và nhận phản hồi riêng tư.</div>
+              <button type="button" class="btn blue" onclick="window.checkAuthOrPrompt('gửi ticket cho admin hỗ trợ')" style="padding:6px 16px;font-size:12px;font-weight:700;border-radius:6px;cursor:pointer">ĐĂNG NHẬP NGAY</button>
+            </div>
+          `);
+          if (typeof window.checkAuthOrPrompt === 'function') {
+            window.checkAuthOrPrompt('gửi ticket cho admin hỗ trợ');
+          }
+        } else if (data.isHandover) {
+          const existingNotice = document.getElementById('chatHandoverNotice');
+          if (!existingNotice) {
+            chatBody.insertAdjacentHTML('beforeend', `
+              <div class="chat-handover-notice" id="chatHandoverNotice">
+                ⚠️ Đã kết nối với Quản Trị Viên • Đang chờ nhân viên trả lời...
+              </div>
+            `);
+          }
+        }
+        chatBody.scrollTop = chatBody.scrollHeight;
+      }
+    } catch (err) {
+      console.error('SendChatMessage error:', err);
+    }
   });
 }
 

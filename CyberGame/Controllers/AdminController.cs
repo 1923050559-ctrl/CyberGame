@@ -708,6 +708,233 @@ namespace CyberGame.Controllers
 
             return View();
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAdminChatList()
+        {
+            var sessions = await _context.ChatSessions
+                .Include(s => s.User)
+                .Include(s => s.SupportTicket)
+                .Include(s => s.ChatMessages)
+                .Where(s => s.ChatMessages.Any() || s.SupportTicket != null)
+                .OrderByDescending(s => s.ChatMessages.Max(m => (DateTime?)m.CreatedAt) ?? s.StartedAt)
+                .ToListAsync();
+
+            var activeGamingSessions = await _context.Sessions
+                .Include(s => s.Computer)
+                .Where(s => s.EndTime == null)
+                .ToListAsync();
+
+            var list = new List<AdminConversationDto>();
+
+            foreach (var s in sessions)
+            {
+                var user = s.User;
+                string custName = user != null ? user.Username : $"Khách Web #{s.ChatSessionId}";
+                string avatar = user != null
+                    ? (user.Username.Length >= 2 ? user.Username.Substring(0, 2).ToUpper() : user.Username.ToUpper())
+                    : "KH";
+
+                string seat = "Khách Web";
+                if (user != null)
+                {
+                    var gSession = activeGamingSessions.FirstOrDefault(gs => gs.UserId == user.UserId);
+                    if (gSession?.Computer != null)
+                    {
+                        seat = $"Máy {gSession.Computer.ComputerName}";
+                    }
+                }
+
+                var ticket = s.SupportTicket;
+                string status = "bot_active";
+                string? waitingReason = null;
+
+                if (ticket != null)
+                {
+                    if (ticket.Status == "open" || ticket.Status == "in_progress")
+                    {
+                        status = "waiting_admin";
+                        waitingReason = ticket.Subject;
+                    }
+                    else if (ticket.Status == "resolved" || ticket.Status == "closed")
+                    {
+                        status = "resolved";
+                    }
+                }
+
+                var sortedMessages = s.ChatMessages
+                    .OrderBy(m => m.CreatedAt)
+                    .Select(m => new AdminMessageDto
+                    {
+                        Id = m.MessageId,
+                        Sender = m.Sender == "user" ? "customer" : (m.Sender == "staff" ? "admin" : "bot"),
+                        Text = m.Content,
+                        Time = m.CreatedAt.ToLocalTime().ToString("HH:mm"),
+                        CreatedAt = m.CreatedAt
+                    })
+                    .ToList();
+
+                var lastTime = sortedMessages.LastOrDefault()?.Time ?? s.StartedAt.ToLocalTime().ToString("HH:mm");
+
+                list.Add(new AdminConversationDto
+                {
+                    Id = s.ChatSessionId,
+                    UserId = s.UserId,
+                    CustomerName = custName,
+                    Email = user?.Email ?? "",
+                    Phone = user?.Phone ?? "",
+                    Seat = seat,
+                    Balance = user?.Balance ?? 0,
+                    AvatarText = avatar,
+                    IsOnline = true,
+                    Status = status,
+                    TicketStatus = ticket?.Status,
+                    WaitingReason = waitingReason,
+                    UpdatedAt = lastTime,
+                    Messages = sortedMessages
+                });
+            }
+
+            return Json(list);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SendAdminReply([FromBody] AdminReplyDto dto)
+        {
+            if (dto == null || dto.ChatSessionId <= 0 || string.IsNullOrWhiteSpace(dto.Content))
+            {
+                return Json(new { success = false, message = "Dữ liệu phản hồi không hợp lệ." });
+            }
+
+            var session = await _context.ChatSessions.FindAsync(dto.ChatSessionId);
+            if (session == null)
+            {
+                return Json(new { success = false, message = "Không tìm thấy phiên chat này." });
+            }
+
+            var clean = dto.Content.Trim();
+            var msg = new ChatMessage
+            {
+                ChatSessionId = dto.ChatSessionId,
+                Sender = "staff",
+                Content = clean,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.ChatMessages.Add(msg);
+
+            var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.ChatSessionId == dto.ChatSessionId);
+            if (ticket != null)
+            {
+                ticket.Status = "resolved";
+                var adminClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(adminClaim, out int aid))
+                {
+                    ticket.AssignedStaff = aid;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                message = "Đã gửi phản hồi tới khách hàng thành công!",
+                data = new AdminMessageDto
+                {
+                    Id = msg.MessageId,
+                    Sender = "admin",
+                    Text = msg.Content,
+                    Time = msg.CreatedAt.ToLocalTime().ToString("HH:mm"),
+                    CreatedAt = msg.CreatedAt
+                }
+            });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ToggleTicketStatus([FromBody] ToggleTicketStatusDto dto)
+        {
+            if (dto == null || dto.ChatSessionId <= 0)
+            {
+                return Json(new { success = false, message = "Mã phiên chat không hợp lệ." });
+            }
+
+            var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.ChatSessionId == dto.ChatSessionId);
+            if (ticket == null)
+            {
+                ticket = new SupportTicket
+                {
+                    ChatSessionId = dto.ChatSessionId,
+                    Subject = "Hỗ trợ khách hàng",
+                    Status = dto.Status ?? "resolved",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.SupportTickets.Add(ticket);
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(dto.Status))
+                {
+                    ticket.Status = dto.Status;
+                }
+                else
+                {
+                    ticket.Status = ticket.Status == "open" ? "resolved" : "open";
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Json(new
+            {
+                success = true,
+                status = ticket.Status,
+                message = ticket.Status == "open" ? "Đã chuyển sang trạng thái chờ xử lý." : "Đã đánh dấu giải quyết thành công!"
+            });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateDirectChat([FromBody] CreateAdminChatDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Seat) || string.IsNullOrWhiteSpace(dto.Content))
+            {
+                return Json(new { success = false, message = "Vui lòng chọn máy và nhập nội dung tin nhắn." });
+            }
+
+            var computer = await _context.Computers.FirstOrDefaultAsync(c => c.ComputerName == dto.Seat || dto.Seat.Contains(c.ComputerName));
+            int? targetUserId = null;
+            if (computer != null)
+            {
+                var activeSession = await _context.Sessions
+                    .Where(s => s.ComputerId == computer.ComputerId && s.EndTime == null)
+                    .OrderByDescending(s => s.StartTime)
+                    .FirstOrDefaultAsync();
+                if (activeSession != null)
+                {
+                    targetUserId = activeSession.UserId;
+                }
+            }
+
+            var session = new ChatSession
+            {
+                UserId = targetUserId,
+                StartedAt = DateTime.UtcNow,
+                Status = "open"
+            };
+            _context.ChatSessions.Add(session);
+            await _context.SaveChangesAsync();
+
+            var adminMsg = new ChatMessage
+            {
+                ChatSessionId = session.ChatSessionId,
+                Sender = "staff",
+                Content = dto.Content.Trim(),
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.ChatMessages.Add(adminMsg);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, sessionId = session.ChatSessionId, message = "Đã gửi tin nhắn tới máy trạm!" });
+        }
     }
 
     public class UpdateOrderStatusDto
