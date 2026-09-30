@@ -77,7 +77,7 @@ CREATE TABLE WALLET_TRANSACTIONS (
     reference_id INT NULL,
     created_at DATETIME NOT NULL CONSTRAINT DF_WalletTransactions_CreatedAt DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT FK_WalletTransactions_Users FOREIGN KEY (user_id) REFERENCES USERS(user_id),
-    CONSTRAINT CK_WalletTransactions_Type CHECK (type IN ('recharge', 'session_fee', 'food_order', 'refund'))
+    CONSTRAINT CK_WalletTransactions_Type CHECK (type IN ('recharge', 'session_fee', 'booking', 'food_order', 'refund'))
 );
 
 -- BẢNG 5: ZONES (Các khu vực phòng máy)
@@ -165,7 +165,7 @@ CREATE TABLE FOOD_ORDERS (
     booking_id INT NULL,
     session_id INT NULL,
     seat_label VARCHAR(20) NULL,
-    payment_method VARCHAR(30) NOT NULL CONSTRAINT DF_FoodOrders_Payment DEFAULT 'cash',
+    payment_method VARCHAR(30) NOT NULL CONSTRAINT DF_FoodOrders_Payment DEFAULT 'CASH',
     status VARCHAR(20) NOT NULL CONSTRAINT DF_FoodOrders_Status DEFAULT 'pending',
     total_amount DECIMAL(12,2) NOT NULL CONSTRAINT DF_FoodOrders_Total DEFAULT 0.00,
     created_at DATETIME NOT NULL CONSTRAINT DF_FoodOrders_CreatedAt DEFAULT CURRENT_TIMESTAMP,
@@ -174,6 +174,7 @@ CREATE TABLE FOOD_ORDERS (
     CONSTRAINT FK_FoodOrders_Bookings FOREIGN KEY (booking_id) REFERENCES BOOKINGS(booking_id),
     CONSTRAINT FK_FoodOrders_Sessions FOREIGN KEY (session_id) REFERENCES SESSIONS(session_id),
     CONSTRAINT CK_FoodOrders_Total CHECK (total_amount >= 0),
+    CONSTRAINT CK_FoodOrders_Payment CHECK (payment_method IN ('CASH', 'BANK_QR', 'WALLET')),
     CONSTRAINT CK_FoodOrders_Status CHECK (status IN ('pending', 'preparing', 'delivered', 'completed', 'cancelled'))
 );
 
@@ -279,8 +280,7 @@ GO
 INSERT INTO PAYMENT_METHODS (name, code, is_active) VALUES
 (N'Tiền mặt', 'CASH', 1),
 (N'Chuyển khoản VietQR', 'BANK_QR', 1),
-(N'Ví điện tử MoMo', 'MOMO', 1),
-(N'Thẻ ATM / Thẻ quốc tế', 'CARD', 1);
+(N'Ví CyberGame', 'WALLET', 1);
 GO
 
 -- -----------------------------------------------------------------------------
@@ -410,7 +410,80 @@ INSERT INTO KNOWLEDGE_BASE (question, answer, category, status) VALUES
 (N'Phòng Stream Room trang bị những gì?', N'Phòng Stream trang bị PC cấu hình khủng Core i9-13900K, RTX 4080, 2 màn hình 240Hz, bộ đèn Key Light, Micro Rode thu âm chống ồn và Stream Deck hỗ trợ phát sóng mượt mà.', N'Specs', 'active');
 GO
 
+-- -----------------------------------------------------------------------------
+-- 4.8. CÁC NGHIỆP VỤ MẪU LIÊN KẾT DUY NHẤT VỚI TÀI KHOẢN ADMIN (user_id = 1)
+-- -----------------------------------------------------------------------------
 
+-- 1 Lịch sử nạp tiền mẫu của Admin
+INSERT INTO RECHARGES (user_id, amount, method_id, status, transaction_code, created_at, updated_at)
+VALUES (1, 5000000.00, 2, 'completed', 'VQR_ADMIN_INIT_001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- Biến động số dư ví tương ứng
+INSERT INTO WALLET_TRANSACTIONS (user_id, type, amount, reference_id, created_at)
+VALUES (1, 'recharge', 5000000.00, 1, CURRENT_TIMESTAMP);
+
+-- 1 Đơn đặt máy mẫu của Admin tại máy VIP V05
+INSERT INTO BOOKINGS (user_id, computer_id, start_time, end_time, hold_expires_at, status, created_at)
+VALUES (
+    1,
+    45, -- Máy V05
+    DATEADD(HOUR, 1, CURRENT_TIMESTAMP),
+    DATEADD(HOUR, 4, CURRENT_TIMESTAMP),
+    DATEADD(MINUTE, 30, CURRENT_TIMESTAMP),
+    'confirmed',
+    CURRENT_TIMESTAMP
+);
+
+-- 1 Phiên chơi mẫu đang diễn ra của Admin tại máy Pro Stage P01
+INSERT INTO SESSIONS (booking_id, user_id, computer_id, start_time, total_minutes, total_cost)
+VALUES (
+    NULL,
+    1,
+    61, -- Máy P01
+    DATEADD(MINUTE, -90, CURRENT_TIMESTAMP),
+    90,
+    30000.00
+);
+
+-- 1 Đơn gọi món F&B mẫu tại máy P01 của Admin
+INSERT INTO FOOD_ORDERS (user_id, booking_id, session_id, seat_label, payment_method, status, total_amount, created_at)
+VALUES (
+    1,
+    NULL,
+    1,
+    'P01',
+    'BANK_QR',
+    'preparing',
+    65000.00,
+    DATEADD(MINUTE, -15, CURRENT_TIMESTAMP)
+);
+
+-- Chi tiết đơn món (1 Cơm rang dưa bò + 1 Bò húc)
+INSERT INTO FOOD_ORDER_ITEMS (order_id, food_id, quantity, unit_price, subtotal) VALUES
+(1, 2, 1, 45000.00, 45000.00), -- Cơm rang dưa bò
+(1, 7, 1, 20000.00, 20000.00); -- Bò húc
+
+-- 1 Phiên chat CSKH mẫu của Admin
+INSERT INTO CHAT_SESSIONS (user_id, started_at, status)
+VALUES (1, DATEADD(MINUTE, -40, CURRENT_TIMESTAMP), 'open');
+
+-- Tin nhắn trong phiên chat
+INSERT INTO CHAT_MESSAGES (chat_session_id, sender, content, created_at) VALUES
+(1, 'user', N'Xin chào, tôi muốn hỏi về cấu hình phòng Stream Room?', DATEADD(MINUTE, -40, CURRENT_TIMESTAMP)),
+(1, 'bot', N'Chào bạn! Phòng Stream Room trang bị Core i9-13900K, 64GB RAM, RTX 4080, Dual Screen 240Hz kèm Micro Rode và Elgato Stream Deck bạn nhé!', DATEADD(MINUTE, -39, CURRENT_TIMESTAMP)),
+(1, 'user', N'Cảm ơn bạn, tôi muốn đặt trước phòng R01 cho tối nay.', DATEADD(MINUTE, -35, CURRENT_TIMESTAMP)),
+(1, 'staff', N'Dạ nhân viên trực đã ghi nhận yêu cầu của bạn và giữ phòng R01 rồi ạ!', DATEADD(MINUTE, -30, CURRENT_TIMESTAMP));
+
+-- 1 Phiếu hỗ trợ kỹ thuật liên kết phiên chat
+INSERT INTO SUPPORT_TICKETS (chat_session_id, assigned_staff, subject, status, created_at)
+VALUES (
+    1,
+    1, -- Phân công cho Admin
+    N'Tư vấn & đặt trước phòng máy Stream Room R01',
+    'in_progress',
+    DATEADD(MINUTE, -30, CURRENT_TIMESTAMP)
+);
+GO
 
 -- =============================================================================
 -- HOÀN TẤT KHỞI TẠO CƠ SỞ DỮ LIỆU CYBERGAMEDB
