@@ -16,6 +16,14 @@ namespace CyberGame.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         private readonly CyberGameDbContext _context;
+        private const int HoldMinutes = 30;      // giữ chỗ 30 phút sau giờ hẹn
+        private const int MaxAdvanceHours = 3;   // chỉ được đặt trước tối đa 3 tiếng
+        private IQueryable<Booking> OverlappingBookings(DateTime start, DateTime end, DateTime now) =>
+    _context.Bookings.Where(b =>
+        (b.Status == "pending" || b.Status == "confirmed")
+        && (b.Status == "confirmed" || b.HoldExpiresAt == null || b.HoldExpiresAt > now)
+        && b.StartTime < end
+        && (b.EndTime == null || b.EndTime > start));
 
         public HomeController(ILogger<HomeController> logger, CyberGameDbContext context)
         {
@@ -117,24 +125,46 @@ namespace CyberGame.Controllers
                 IsUserLoggedIn = isUserLoggedIn,
                 CurrentUsername = currentUsername
             };
+            var nowB = DateTime.Now;
+            ViewBag.ActiveBookings = await _context.Bookings
+                .Where(b => (b.Status == "pending" || b.Status == "confirmed")
+                         && b.EndTime > nowB
+                         && (b.Status == "confirmed" || b.HoldExpiresAt > nowB))
+                .Select(b => new { b.ComputerId, b.StartTime, b.EndTime })
+                .ToListAsync();
             return View(vm);
         }
 
         [HttpGet]
         public async Task<IActionResult> GetZoneComputers(int zoneId)
         {
-            var computers = await _context.Computers
+            var now = DateTime.Now;
+            var rows = await _context.Computers
                 .Where(c => c.ZoneId == zoneId)
                 .OrderBy(c => c.ComputerName)
                 .Select(c => new
                 {
                     id = c.ComputerId,
                     name = c.ComputerName,
-                    status = c.Status
+                    status = c.Status,
+                    nextBookingAt = c.Bookings
+                        .Where(b => (b.Status == "pending" || b.Status == "confirmed")
+                                 && b.EndTime > now
+                                 && (b.Status == "confirmed" || b.HoldExpiresAt > now))
+                        .OrderBy(b => b.StartTime)
+                        .Select(b => (DateTime?)b.StartTime)
+                        .FirstOrDefault()
                 })
                 .ToListAsync();
 
-            return Json(computers);
+            return Json(rows.Select(r => new
+            {
+                r.id,
+                r.name,
+                r.status,
+                nextBookingAt = r.nextBookingAt?.ToString("yyyy-MM-ddTHH:mm:ss"),
+                nextBookingLabel = r.nextBookingAt?.ToString("HH:mm")   // vd "11:00"
+            }));
         }
 
         [HttpPost]
@@ -184,31 +214,63 @@ namespace CyberGame.Controllers
                 {
                     selectedCompIds.Add(dto.ComputerId.Value);
                 }
+                var now = DateTime.Now;
+                var startTime = dto.StartTime == default
+                ? now
+                : (dto.StartTime.Kind == DateTimeKind.Utc ? dto.StartTime.ToLocalTime() : dto.StartTime);
+                if (startTime < now.AddMinutes(-5))
+                    return Json(new { success = false, message = "Giờ đặt không được ở trong quá khứ." });
+                if (startTime > now.AddHours(MaxAdvanceHours))
+                    return Json(new { success = false, message = $"Chỉ được đặt trước tối đa {MaxAdvanceHours} tiếng." });
 
+                var endTime = startTime.AddHours(dto.DurationHours > 0 ? dto.DurationHours : 2);
+                bool startsNow = startTime <= now.AddMinutes(5);
                 // Nếu chưa có máy chỉ định, tự động gán máy rảnh thuộc khu vực
                 int people = dto.NumberOfPeople > 0 ? dto.NumberOfPeople : 1;
                 if (!selectedCompIds.Any())
                 {
-                    var availableComps = await _context.Computers
-                        .Where(c => c.ZoneId == dto.ZoneId && c.Status == "available")
+                    var busyIds = await OverlappingBookings(startTime, endTime, now)
+                        .Select(b => b.ComputerId).Distinct().ToListAsync();
+
+                    var freeComps = await _context.Computers
+                        .Where(c => c.ZoneId == dto.ZoneId
+                                 && c.Status != "maintenance" && c.Status != "offline"
+                                 && (!startsNow || c.Status == "available")
+                                 && !busyIds.Contains(c.ComputerId))
                         .Take(people)
                         .Select(c => c.ComputerId)
                         .ToListAsync();
 
-                    if (availableComps.Any())
-                    {
-                        selectedCompIds.AddRange(availableComps);
-                    }
-                    else
-                    {
-                        var anyComp = await _context.Computers.FirstOrDefaultAsync(c => c.ZoneId == dto.ZoneId);
-                        if (anyComp != null) selectedCompIds.Add(anyComp.ComputerId);
-                    }
+                    if (freeComps.Count < people)
+                        return Json(new { success = false, message = "Khu vực này không đủ máy trống trong khung giờ bạn chọn." });
+
+                    selectedCompIds.AddRange(freeComps);
                 }
 
-                var startTime = dto.StartTime == default ? DateTime.Now : dto.StartTime;
-                var endTime = startTime.AddHours(dto.DurationHours > 0 ? dto.DurationHours : 2);
 
+                selectedCompIds = selectedCompIds.Distinct().ToList();
+                if (!selectedCompIds.Any())
+                    return Json(new { success = false, message = "Vui lòng chọn máy." });
+
+                await using var tx = await _context.Database.BeginTransactionAsync();
+
+                // "Khoá" các dòng máy: request đến sau phải chờ request trước commit xong.
+                // Đồng thời loại máy bảo trì/offline, và máy đang bận nếu đặt sát giờ.
+                int locked = await _context.Computers
+                    .Where(c => selectedCompIds.Contains(c.ComputerId)
+                             && c.Status != "maintenance" && c.Status != "offline"
+                             && (!startsNow || c.Status == "available"))
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, c => c.Status));
+
+                if (locked != selectedCompIds.Count)
+                    return Json(new { success = false, message = "Có máy đang bảo trì hoặc đang được sử dụng, vui lòng chọn máy khác." });
+
+                bool conflict = await OverlappingBookings(startTime, endTime, now)
+                    .AnyAsync(b => selectedCompIds.Contains(b.ComputerId));
+                if (conflict)
+                    return Json(new { success = false, message = "Máy đã có người đặt trong khung giờ này, vui lòng chọn máy hoặc giờ khác."
+                    
+                    });
                 // Tính toán tiền máy & tiền cọc tối thiểu 30 phút
                 decimal zonePrice = 10000;
                 var targetZone = await _context.Zones.FindAsync(dto.ZoneId);
@@ -291,7 +353,8 @@ namespace CyberGame.Controllers
                         ComputerId = cId,
                         StartTime = startTime,
                         EndTime = endTime,
-                        Status = "confirmed",
+                        Status = "pending",
+                        HoldExpiresAt = startTime.AddMinutes(HoldMinutes),
                         CreatedAt = DateTime.UtcNow
                     };
 
@@ -351,7 +414,7 @@ namespace CyberGame.Controllers
                     }
                     await _context.SaveChangesAsync();
                 }
-
+                await tx.CommitAsync();
                 var bookedComputers = await _context.Computers
                     .Where(c => selectedCompIds.Contains(c.ComputerId))
                     .Select(c => c.ComputerName)
@@ -605,6 +668,7 @@ namespace CyberGame.Controllers
                 .ToListAsync();
             return Json(zones);
         }
+
 
         private int? GetCurrentUserId()
         {

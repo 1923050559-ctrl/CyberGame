@@ -35,6 +35,8 @@ namespace CyberGame
                 options.Cookie.IsEssential = true;
             });
 
+            builder.Services.AddHostedService<CyberGame.Services.BookingStatusService>();
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.

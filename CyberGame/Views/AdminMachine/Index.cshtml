@@ -1,0 +1,108 @@
+﻿@model List<CyberGame.Models.ViewModels.AdminMachineRowViewModel>
+@{
+    ViewData["Title"] = "Quản Lý Trạng Thái Máy";
+    Layout = "_AdminLayout";
+    var zones = Model
+        .GroupBy(c => new { c.ZoneId, c.ZoneName })
+        .OrderBy(g => g.Key.ZoneId)
+        .ToList();
+}
+
+<div style="padding:24px">
+    <h2 style="color:#fff;margin-bottom:16px">Quản Lý Trạng Thái Máy</h2>
+
+    @if (TempData["MachineSuccess"] != null)
+    {
+        <div style="background:rgba(16,185,129,0.15);color:#10b981;padding:10px 14px;border-radius:6px;margin-bottom:16px">
+            @TempData["MachineSuccess"]
+        </div>
+    }
+    @if (TempData["MachineError"] != null)
+    {
+        <div style="background:rgba(239,68,68,0.15);color:#ef4444;padding:10px 14px;border-radius:6px;margin-bottom:16px">
+            @TempData["MachineError"]
+        </div>
+    }
+
+    <!-- Tab chọn Zone -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+        @for (int i = 0; i < zones.Count; i++)
+        {
+            var zone = zones[i];
+            <button type="button"
+                    class="zone-tab-btn @(i == 0 ? "active" : "")"
+                    data-zone-target="zone-panel-@zone.Key.ZoneId"
+                    style="padding:8px 18px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:@(i == 0 ? "#6366f1" : "#1a1d24");color:#fff;cursor:pointer">
+                @zone.Key.ZoneName
+            </button>
+        }
+    </div>
+
+    <!-- Lưới máy theo từng zone -->
+    @for (int i = 0; i < zones.Count; i++)
+    {
+        var zone = zones[i];
+        <div id="zone-panel-@zone.Key.ZoneId" class="zone-panel" style="display:@(i == 0 ? "grid" : "none");grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px">
+            @foreach (var comp in zone.OrderBy(c => c.ComputerName))
+            {
+                var color = comp.Status switch
+                {
+                    "available" => "#10b981",
+                    "in_use" => "#ef4444",
+                    "maintenance" => "#f59e0b",
+                    _ => "#6b7280"
+                };
+                <div style="background:#161a22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:14px;text-align:center">
+                    <div style="font-weight:700;font-size:16px;color:#fff;margin-bottom:6px">@comp.ComputerName</div>
+                    <div style="font-size:12px;font-weight:700;color:@color;margin-bottom:10px">@comp.StatusLabel</div>
+                    @if (comp.BookingId != null)
+                    {
+                        <div style="font-size:11px;color:#9ca3af;margin-bottom:8px">
+                            @(comp.BookingStatus == "pending" ? "Đặt" : "Đã check-in") lúc @(comp.BookingStart?.ToString("HH:mm")) · @comp.BookingCustomer
+                            @if (comp.BookingStatus == "pending" && comp.HoldExpiresAt != null)
+                            {
+                                <br />
+                                <span>Giữ đến @(comp.HoldExpiresAt?.ToString("HH:mm"))</span>
+                            }
+                        </div>
+                        <form asp-controller="AdminMachine" asp-action="CancelBooking" method="post" onsubmit="return confirm('Huỷ booking này?')">
+                            <input type="hidden" name="bookingId" value="@comp.BookingId" />
+                            <button type="submit" class="btn-admin" style="width:100%;padding:4px 0;margin-bottom:6px;background:#ef4444">Huỷ booking</button>
+                        </form>
+                    }
+
+                    <form asp-controller="AdminMachine" asp-action="UpdateStatus" method="post">
+                        <input type="hidden" name="computerId" value="@comp.ComputerId" />
+                        <select name="status" style="width:100%;background:#0d1015;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:4px;margin-bottom:6px">
+                            <option value="available" selected="@(comp.Status == "available")">Trống</option>
+                            <option value="in_use" selected="@(comp.Status == "in_use")">Đang sử dụng</option>
+                            <option value="maintenance" selected="@(comp.Status == "maintenance")">Bảo trì</option>
+                            <option value="offline" selected="@(comp.Status == "offline")">Ngừng hoạt động</option>
+                        </select>
+                        <button type="submit" class="btn-admin" style="width:100%;padding:4px 0">Lưu</button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('.zone-tab-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.querySelectorAll('.zone-tab-btn').forEach(function (b) {
+                    b.classList.remove('active');
+                    b.style.background = '#1a1d24';
+                });
+                btn.classList.add('active');
+                btn.style.background = '#6366f1';
+
+                document.querySelectorAll('.zone-panel').forEach(function (panel) {
+                    panel.style.display = 'none';
+                });
+                document.getElementById(btn.dataset.zoneTarget).style.display = 'grid';
+            });
+        });
+    </script>
+}
