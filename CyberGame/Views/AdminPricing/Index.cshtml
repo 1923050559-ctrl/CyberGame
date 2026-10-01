@@ -1,0 +1,55 @@
+﻿@model List<CyberGame.Models.ViewModels.AdminPricingRowViewModel>
+@{
+    ViewData["Title"] = "Quản Lý Bảng Giá";
+    Layout = "_AdminLayout";
+}
+
+<div style="padding:24px">
+    <h2 style="color:#fff;margin-bottom:16px">Quản Lý Bảng Giá</h2>
+
+    @if (TempData["PricingSuccess"] != null)
+    {
+        <div style="background:rgba(16,185,129,0.15);color:#10b981;padding:10px 14px;border-radius:6px;margin-bottom:16px">
+            @TempData["PricingSuccess"]
+        </div>
+    }
+    @if (TempData["PricingError"] != null)
+    {
+        <div style="background:rgba(239,68,68,0.15);color:#ef4444;padding:10px 14px;border-radius:6px;margin-bottom:16px">
+            @TempData["PricingError"]
+        </div>
+    }
+
+    <table style="width:100%;border-collapse:collapse;color:#e5e7eb">
+        <thead>
+            <tr style="text-align:left;border-bottom:1px solid rgba(255,255,255,0.1)">
+                <th style="padding:10px">Khu vực</th>
+                <th style="padding:10px">Cấu hình</th>
+                <th style="padding:10px">Giá hiện tại (đ/giờ)</th>
+                <th style="padding:10px">Cập nhật giá mới</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var zone in Model)
+            {
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+                    <td style="padding:10px;font-weight:700;color:#fff">@zone.ZoneName</td>
+                    <td style="padding:10px;color:#9ca3af">@zone.Specs</td>
+                    <td style="padding:10px">@(zone.PricePerHour.ToString("N0"))đ</td>
+                    <td style="padding:10px">
+                        <form asp-controller="AdminPricing" asp-action="UpdatePrice" method="post" style="display:flex;gap:8px">
+                            <input type="hidden" name="zoneId" value="@zone.ZoneId" />
+                            <input type="number" name="price" step="0.01" min="0" value="@zone.PricePerHour.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                                   style="background:#1a1d24;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:4px;width:120px" />
+                            <button type="submit" class="btn-admin" style="padding:4px 12px">Lưu</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}

@@ -114,6 +114,7 @@ namespace CyberGame.Controllers
             // 3. Recharges revenue
             var recharges = await _context.Recharges
                 .Include(r => r.User)
+                .Include(r => r.Method)
                 .Where(r => r.Status == "completed")
                 .ToListAsync();
             var totalRecharges = recharges.Sum(r => r.Amount);
@@ -424,7 +425,7 @@ namespace CyberGame.Controllers
                     z.ZoneName,
                     z.PricePerHour,
                     TotalComputers = z.Computers.Count,
-                    ActiveComputers = z.Computers.Count(c => c.Status == "occupied")
+                    ActiveComputers = z.Computers.Count(c => c.Status == "in_use")
                 })
                 .ToListAsync();
 

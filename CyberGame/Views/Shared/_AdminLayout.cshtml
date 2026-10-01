@@ -39,6 +39,14 @@
                     <span>Tin Nhắn Khách Hàng</span>
                     <span class="chat-nav-badge" id="navChatPendingBadge" style="display:none">0</span>
                 </a>
+                <a asp-controller="AdminMachine" asp-action="Index" class="admin-nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AdminMachine" ? "active" : "")">
+                    <span>🖥️</span>
+                    <span>Trạng Thái Máy</span>
+                </a>
+                <a asp-controller="AdminPricing" asp-action="Index" class="admin-nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "AdminPricing" ? "active" : "")">
+                    <span>💰</span>
+                    <span>Bảng Giá</span>
+                </a>
             </nav>
 
             <div class="admin-header-actions">

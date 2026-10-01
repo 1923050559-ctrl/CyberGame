@@ -23,6 +23,7 @@
             status = c.Status
         })
     })));
+    window.DB_ACTIVE_BOOKINGS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize((object?)ViewBag.ActiveBookings ?? new object[0]));
 
     window.DB_FOODS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model?.Foods?.Select(f => new {
         id = f.FoodId.ToString(),
@@ -283,7 +284,8 @@
         flatpickr("#bDateTime", {
           enableTime: true,
           dateFormat: "Y-m-d H:i",
-          minDate: "today",
+          minDate: new Date(),
+          maxDate: new Date(Date.now() + 3 * 60 * 60 * 1000),   // tối đa 3 tiếng
           time_24hr: true,
           defaultDate: new Date(Date.now() + 30 * 60000),
           onChange: function() {

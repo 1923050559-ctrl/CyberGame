@@ -143,6 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="seat-legend">
             <div class="legend-item"><div class="legend-color legend-available"></div> Trống</div>
             <div class="legend-item"><div class="legend-color legend-selected"></div> Đang chọn</div>
+            <div class="legend-item"><div class="legend-color legend-upcoming"></div> Sắp có người đặt</div>
             <div class="legend-item"><div class="legend-color legend-inuse"></div> Đã có người</div>
           </div>
         </div>
@@ -153,37 +154,72 @@ document.addEventListener("DOMContentLoaded", () => {
       chosenSeats = [];
       return;
     }
-  
+  function getChosenWindow() {
+      const dtVal = document.querySelector("#bDateTime")?.value;
+      const hours = parseFloat(document.querySelector("#bDuration")?.value) || 2;
+      const start = dtVal ? new Date(dtVal.replace(" ", "T")) : new Date();
+      return { start, end: new Date(start.getTime() + hours * 3600000) };
+    }
+
+
   const zone = DATA.zones.find(z => z.id == zoneId);
   if (!zone) return;
   const totalSeats = zone.max || (zone.computers ? zone.computers.length : 40);
   
   let seatsHTML = '';
   if (zone.computers && zone.computers.length > 0) {
-    zone.computers.forEach(comp => {
-      let isAvailable = comp.status === 'available';
-      let status = isAvailable ? 'available' : 'inuse';
-      let seatLabel = comp.name;
-      
-      if (chosenSeats.includes(seatLabel)) {
-        status += ' selected';
-      }
-      
-      let title = isAvailable ? `Máy ${seatLabel} (Rảnh)` : (comp.status === 'maintenance' ? `Máy ${seatLabel} (Bảo trì)` : `Máy ${seatLabel} (Đang sử dụng)`);
-      seatsHTML += `<div class="seat ${status}" data-id="${seatLabel}" data-comp-id="${comp.id}" title="${title}">${seatLabel}</div>`;
-    });
-  } else {
-    for(let i=1; i<=totalSeats; i++) {
-      let status = 'available';
-      let seatLabel = (zone.prefix || 'M') + i.toString().padStart(2, '0');
-      
-      if(chosenSeats.includes(seatLabel)) {
-        status += ' selected';
-      }
-      
-      seatsHTML += `<div class="seat ${status}" data-id="${seatLabel}">${seatLabel}</div>`;
+
+      const win = getChosenWindow();
+      const fmt = d => d.toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+
+      zone.computers.forEach(comp => {
+        const mine = (window.DB_ACTIVE_BOOKINGS || [])
+          .filter(b => b.ComputerId == comp.id)
+          .map(b => ({
+            s: new Date(b.StartTime),
+            e: new Date(b.EndTime)
+          }))
+          .sort((a, b) => a.s - b.s);
+
+        const conflict = mine.find(b => b.s < win.end && b.e > win.start);
+
+        const upcoming = mine.find(b => b.e > new Date());
+
+        const isAvailable = comp.status === 'available' && !conflict;
+        let status = isAvailable ? 'available' : 'inuse';
+        if (isAvailable && upcoming) status += ' has-upcoming';
+        const seatLabel = comp.name;
+
+        if (chosenSeats.includes(seatLabel)) {
+          status += ' selected';
+        }
+
+        let title;
+
+        if (conflict)
+          title = `Máy ${seatLabel} (Đã có người đặt lúc ${fmt(conflict.s)})`;
+        else if (comp.status === 'maintenance')
+          title = `Máy ${seatLabel} (Đang bảo trì)`;
+        else if (comp.status !== 'available')
+          title = `Máy ${seatLabel} (Đang có người sử dụng)`;
+        else if (upcoming)
+          title = `Máy ${seatLabel}\n• Trạng thái: Đang rảnh\n• Có lịch đặt lúc: ${fmt(upcoming.s)}\n• Bạn vẫn có thể sử dụng trước giờ này`;
+        else
+          title = `Máy ${seatLabel} (Đang rảnh)`;
+
+        seatsHTML += `<div class="seat ${status}" 
+          data-id="${seatLabel}" 
+          data-comp-id="${comp.id}" 
+          title="${title}">
+          ${seatLabel}
+        </div>`;
+      });
+
     }
-  }
   
   wrap.innerHTML = `
     <button class="close" data-close-seat title="Đóng">×</button>
@@ -191,8 +227,9 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="seat-map-title">Sơ đồ máy - ${zoneName}</div>
       <div class="seat-legend">
         <div class="legend-item"><div class="legend-color legend-available"></div> Rảnh</div>
+        <div class="legend-item"><div class="legend-color legend-upcoming"></div> Sắp có lịch</div>
         <div class="legend-item"><div class="legend-color legend-selected"></div> Đang chọn</div>
-        <div class="legend-item"><div class="legend-color legend-inuse"></div> Có người</div>
+        <div class="legend-item"><div class="legend-color legend-inuse"></div> Có người/Đã đặt</div>
       </div>
     </div>
     <div class="seat-grid">
@@ -218,7 +255,18 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       infoText = `<span>Đang chọn: <strong style="color:var(--blue2)">${chosenSeats.join(', ')}</strong> (${chosenCount}/${peopleCount} máy - Đã đủ)</span>`;
     }
-    
+    const limited = chosenSeats.map(label => {
+      const comp = zone.computers.find(c => c.name === label);
+      const next = (window.DB_ACTIVE_BOOKINGS || [])
+        .filter(b => comp && b.ComputerId == comp.id && new Date(b.EndTime) > new Date())
+        .map(b => new Date(b.StartTime)).sort((a, b) => a - b)[0];
+      return next ? `Máy <strong>${label}</strong>: Bạn có thể chơi tối đa đến <strong>${fmt(next)}</strong> (sau giờ này đã có khách đặt trước)` : null;
+    }).filter(Boolean);
+
+    if (limited.length) {
+      infoText += `<div style="margin-top:4px;font-size:11.5px;color:#f59e0b">⚠ ${limited.join('<br>⚠ ')}</div>`;
+    }
+
     let toastHTML = msg 
       ? `<span class="seat-swap-toast">${msg}</span>` 
       : `<span style="font-size:11px;color:#6b7280">💡 Bấm máy đang chọn để hủy, hoặc chọn máy mới để đổi</span>`;
@@ -270,6 +318,13 @@ document.addEventListener("DOMContentLoaded", () => {
       
       updateSeatStatusBar(toastMsg);
       document.querySelector("#bDuration").dispatchEvent(new Event('input'));
+    });
+  });
+
+  wrap.querySelectorAll('.seat.inuse').forEach(el => {
+    el.addEventListener('click', function() {
+      const seatId = this.dataset.id;
+      updateSeatStatusBar(`<span style="color:#ef4444">⛔ Máy <strong>${seatId}</strong> đang có người sử dụng hoặc đã được đặt trước!</span>`);
     });
   });
 }
