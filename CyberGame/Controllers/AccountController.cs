@@ -565,8 +565,15 @@ namespace CyberGame.Controllers
             return Json(new
             {
                 success = true,
-                status = r.Status,                
+                status = r.Status,
                 amount = r.Amount,
+                transactionCode = r.TransactionCode,   
+                content = r.Content,                   
+                referenceCode = r.ReferenceCode,      
+                                                      
+                paidAtUtc = r.PaidAt.HasValue
+        ? DateTime.SpecifyKind(r.PaidAt.Value, DateTimeKind.Utc).ToString("o")
+        : null,
                 newBalance = bal,
                 newBalanceFormatted = bal.HasValue ? bal.Value.ToString("N0") + " đ" : null
             });

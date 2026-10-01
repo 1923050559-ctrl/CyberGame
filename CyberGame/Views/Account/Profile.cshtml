@@ -613,7 +613,35 @@
         </div>
     </div>
 </div>
+<!-- MODAL NẠP TIỀN THÀNH CÔNG -->
+<div id="depositSuccessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center">
+    <div style="background:#15181d;border:1px solid #10b981;border-radius:14px;padding:32px 26px;max-width:420px;width:92%;text-align:center;position:relative">
+        <button onclick="closeDepositSuccessModal()" style="position:absolute;top:12px;right:18px;background:none;border:none;color:#fff;font-size:22px;cursor:pointer">×</button>
+        <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:50%;background:rgba(16,185,129,0.15);color:#10b981;font-size:34px;line-height:64px">✓</div>
+        <h2 style="font-size:20px;color:#fff;margin:0 0 4px">THANH TOÁN THÀNH CÔNG</h2>
+        <div id="dsAmount" style="font-size:30px;font-weight:800;color:#10b981;margin:6px 0 18px">+0 đ</div>
 
+        <div style="text-align:left;font-size:13px;color:#a1aab5;border-top:1px solid #2a2e36">
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #2a2e36">
+                <span>Mã giao dịch</span><strong id="dsCode" style="color:#fff">—</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #2a2e36">
+                <span>Thời gian</span><strong id="dsTime" style="color:#fff">—</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #2a2e36">
+                <span>Nội dung</span><strong id="dsContent" style="color:#fff;text-align:right;word-break:break-all">—</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #2a2e36">
+                <span>Mã tham chiếu</span><strong id="dsRef" style="color:#fff;text-align:right;word-break:break-all">—</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0">
+                <span>Số dư mới</span><strong id="dsBalance" style="color:#10b981">—</strong>
+            </div>
+        </div>
+
+        <button type="button" class="btn" onclick="closeDepositSuccessModal()" style="margin-top:18px;width:100%;background:#10b981;color:#fff">ĐÓNG</button>
+    </div>
+</div>
 <!-- TOAST THÔNG BÁO -->
 <div id="cyberToast" class="cyber-toast"></div>
 
@@ -1880,13 +1908,35 @@
                 }
             }, 3000);
         }
+                function openDepositSuccessModal(d) {
+            const set = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = (v === null || v === undefined || v === "") ? "—" : v;  // textContent: chống chèn HTML từ nội dung ngân hàng
+            };
+            const paid = d.paidAtUtc ? new Date(d.paidAtUtc) : new Date();
 
+            set("dsAmount", "+" + Number(d.amount).toLocaleString("vi-VN") + " đ");
+            set("dsCode", d.transactionCode);
+            set("dsTime", paid.toLocaleString("vi-VN", {
+                day: "2-digit", month: "2-digit", year: "numeric",
+                hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+            }));
+            set("dsContent", d.content);
+            set("dsRef", d.referenceCode);
+            set("dsBalance", d.newBalanceFormatted);
+
+            document.getElementById("depositSuccessModal").style.display = "flex";
+        }
+
+        function closeDepositSuccessModal() {
+            document.getElementById("depositSuccessModal").style.display = "none";
+        }
         function showDepositSuccess(d) {
             document.getElementById("depositPill").textContent = "ĐÃ THANH TOÁN";
             const st = document.getElementById("depositStatusText");
             st.style.color = "#10b981";
             st.innerHTML = `✅ Thanh toán thành công<br><strong>+${Number(d.amount).toLocaleString('vi-VN')} đ</strong><br>Số dư mới: <strong>${d.newBalanceFormatted}</strong>`;
-            showToast(`Đã nhận ${Number(d.amount).toLocaleString('vi-VN')} đ. Số dư mới: ${d.newBalanceFormatted}`, "success");
+            openDepositSuccessModal(d);(d);
 
             const cardBal = document.getElementById("walletCardBalance");
             const statBal = document.getElementById("statCurrentBalance");
