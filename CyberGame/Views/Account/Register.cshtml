@@ -13,6 +13,13 @@
 <p class="sub">Gia nhập cộng đồng Cyber Game để nhận ưu đãi thành viên và trải nghiệm không giới hạn.</p>
 
 <form asp-controller="Account" asp-action="Register" method="post" id="registerForm" autocomplete="on">
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div style="color:#ef4444;font-size:13px;margin-bottom:15px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:12px;border-radius:6px;display:flex;align-items:center;gap:8px;">
+            <span>⚠️</span> <span>@TempData["ErrorMessage"]</span>
+        </div>
+    }
+
     <div asp-validation-summary="ModelOnly" class="text-danger" style="color:#ef4444;font-size:13px;margin-bottom:15px;background:rgba(239,68,68,0.1);padding:10px;border-radius:6px"></div>
 
     <div class="field">
@@ -23,9 +30,10 @@
 
     <div class="two-col">
         <div class="field">
-            <label asp-for="Email">EMAIL</label>
+            <label asp-for="Email">EMAIL THẬT ĐỂ NHẬN OTP</label>
             <input asp-for="Email" type="email" placeholder="vidu@email.com" required>
             <span asp-validation-for="Email" class="text-danger" style="color:#ef4444;font-size:12px"></span>
+            <small style="display:block;margin-top:4px;color:#94a3b8;font-size:11px;">Mã OTP 6 số sẽ được gửi tới email để xác thực chính chủ.</small>
         </div>
         <div class="field">
             <label asp-for="Phone">SỐ ĐIỆN THOẠI</label>
@@ -48,7 +56,7 @@
     </div>
 
     <label class="checkbox-line"><input type="checkbox" required> Tôi đồng ý với <a href="#">Điều khoản sử dụng</a> và <a href="#">Chính sách bảo mật</a> của Cyber Game.</label>
-    <button type="submit" class="btn blue block">TẠO TÀI KHOẢN →</button>
+    <button type="submit" class="btn blue block" style="font-weight:800;letter-spacing:0.5px">TIẾP TỤC (XÁC THỰC EMAIL OTP) →</button>
 </form>
 
 <div class="divider">HOẶC</div>

@@ -37,6 +37,11 @@ namespace CyberGame
 
             builder.Services.AddHostedService<CyberGame.Services.BookingStatusService>();
 
+            // Configure Email Settings & Services
+            builder.Services.Configure<CyberGame.Services.EmailSettings>(
+                builder.Configuration.GetSection("EmailSettings"));
+            builder.Services.AddScoped<CyberGame.Services.IEmailService, CyberGame.Services.EmailService>();
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.

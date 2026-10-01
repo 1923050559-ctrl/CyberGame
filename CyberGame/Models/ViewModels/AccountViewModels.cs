@@ -128,5 +128,31 @@ namespace CyberGame.Models.ViewModels
         public int BookingId { get; set; }
         public string? Reason { get; set; }
     }
+
+    public class VerifyOtpViewModel
+    {
+        [Required(ErrorMessage = "Vui lòng nhập mã OTP")]
+        [StringLength(6, MinimumLength = 6, ErrorMessage = "Mã OTP phải gồm đúng 6 chữ số")]
+        [RegularExpression(@"^[0-9]{6}$", ErrorMessage = "Mã OTP chỉ bao gồm chữ số")]
+        public string OtpCode { get; set; } = string.Empty;
+
+        public string? Email { get; set; }
+
+        public int RemainingSeconds { get; set; } = 300;
+
+        public int ResendCooldownSeconds { get; set; } = 60;
+    }
+
+    public class PendingRegistration
+    {
+        public string Username { get; set; } = null!;
+        public string Email { get; set; } = null!;
+        public string Phone { get; set; } = null!;
+        public string PasswordHash { get; set; } = null!;
+        public string OtpCode { get; set; } = null!;
+        public DateTime OtpExpiry { get; set; }
+        public DateTime LastSentAt { get; set; }
+        public int AttemptCount { get; set; }
+    }
 }
 

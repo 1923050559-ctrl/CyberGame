@@ -1,25 +1,40 @@
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using CyberGame.Models;
 using CyberGame.Models.Entities;
 using CyberGame.Models.ViewModels;
+using CyberGame.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace CyberGame.Controllers
 {
     public class AccountController : Controller
     {
         private readonly CyberGameDbContext _context;
+        private readonly IEmailService _emailService;
+        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<AccountController> _logger;
 
-        public AccountController(CyberGameDbContext context)
+        public AccountController(
+            CyberGameDbContext context,
+            IEmailService emailService,
+            IWebHostEnvironment env,
+            ILogger<AccountController> logger)
         {
             _context = context;
+            _emailService = emailService;
+            _env = env;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -146,6 +161,24 @@ namespace CyberGame.Controllers
         [HttpGet]
         public IActionResult Register()
         {
+            var pendingJson = HttpContext.Session.GetString("PendingRegistration");
+            if (!string.IsNullOrEmpty(pendingJson))
+            {
+                try
+                {
+                    var pending = JsonSerializer.Deserialize<PendingRegistration>(pendingJson);
+                    if (pending != null)
+                    {
+                        return View(new RegisterViewModel
+                        {
+                            Username = pending.Username,
+                            Email = pending.Email,
+                            Phone = pending.Phone
+                        });
+                    }
+                }
+                catch { }
+            }
             return View();
         }
 
@@ -159,26 +192,163 @@ namespace CyberGame.Controllers
             }
 
             var username = model.Username.Trim();
-            var email = model.Email.Trim();
+            var email = model.Email.Trim().ToLowerInvariant();
+            var phone = model.Phone?.Trim() ?? string.Empty;
 
-            if (await _context.Users.AnyAsync(u => u.Username == username))
+            if (await _context.Users.AnyAsync(u => u.Username.ToLower() == username.ToLower()))
             {
                 ModelState.AddModelError("Username", "Tên tài khoản này đã được sử dụng.");
                 return View(model);
             }
 
-            if (await _context.Users.AnyAsync(u => u.Email == email))
+            if (await _context.Users.AnyAsync(u => u.Email != null && u.Email.ToLower() == email))
             {
-                ModelState.AddModelError("Email", "Email này đã được đăng ký.");
+                ModelState.AddModelError("Email", "Địa chỉ email này đã được sử dụng.");
                 return View(model);
+            }
+
+            // Sinh mã OTP ngẫu nhiên 6 chữ số
+            var otp = Random.Shared.Next(100000, 999999).ToString();
+
+            // Lưu thông tin đăng ký tạm thời vào Session để xác thực OTP trước khi ghi vào Database
+            var pending = new PendingRegistration
+            {
+                Username = username,
+                Email = email,
+                Phone = phone,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password),
+                OtpCode = otp,
+                OtpExpiry = DateTime.UtcNow.AddMinutes(5),
+                LastSentAt = DateTime.UtcNow,
+                AttemptCount = 0
+            };
+
+            HttpContext.Session.SetString("PendingRegistration", JsonSerializer.Serialize(pending));
+
+            // Gửi email chứa mã OTP
+            var (emailSent, errorMsg) = await _emailService.SendOtpEmailAsync(email, username, otp, 5);
+
+            if (!emailSent)
+            {
+                TempData["EmailWarning"] = errorMsg ?? "Không thể gửi email OTP tự động. Vui lòng kiểm tra lại cấu hình email.";
+            }
+
+            return RedirectToAction("VerifyOtp");
+        }
+
+        [HttpGet]
+        public IActionResult VerifyOtp()
+        {
+            var pendingJson = HttpContext.Session.GetString("PendingRegistration");
+            if (string.IsNullOrEmpty(pendingJson))
+            {
+                TempData["ErrorMessage"] = "Không tìm thấy phiên đăng ký hoặc phiên đã kết thúc. Vui lòng đăng ký lại.";
+                return RedirectToAction("Register");
+            }
+
+            PendingRegistration? pending;
+            try
+            {
+                pending = JsonSerializer.Deserialize<PendingRegistration>(pendingJson);
+            }
+            catch
+            {
+                return RedirectToAction("Register");
+            }
+
+            if (pending == null)
+            {
+                return RedirectToAction("Register");
+            }
+
+            var remainingSeconds = (int)(pending.OtpExpiry - DateTime.UtcNow).TotalSeconds;
+            var elapsedSinceLastSend = (int)(DateTime.UtcNow - pending.LastSentAt).TotalSeconds;
+
+            var viewModel = new VerifyOtpViewModel
+            {
+                Email = pending.Email,
+                RemainingSeconds = Math.Max(0, remainingSeconds),
+                ResendCooldownSeconds = Math.Max(0, 60 - elapsedSinceLastSend)
+            };
+
+            return View(viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> VerifyOtp(VerifyOtpViewModel model)
+        {
+            var pendingJson = HttpContext.Session.GetString("PendingRegistration");
+            if (string.IsNullOrEmpty(pendingJson))
+            {
+                ModelState.AddModelError(string.Empty, "Phiên đăng ký đã hết hạn. Vui lòng thực hiện lại.");
+                return View(model);
+            }
+
+            PendingRegistration? pending;
+            try
+            {
+                pending = JsonSerializer.Deserialize<PendingRegistration>(pendingJson);
+            }
+            catch
+            {
+                return RedirectToAction("Register");
+            }
+
+            if (pending == null)
+            {
+                return RedirectToAction("Register");
+            }
+
+            model.Email = pending.Email;
+            var remainingSeconds = (int)(pending.OtpExpiry - DateTime.UtcNow).TotalSeconds;
+            model.RemainingSeconds = Math.Max(0, remainingSeconds);
+            var elapsed = (int)(DateTime.UtcNow - pending.LastSentAt).TotalSeconds;
+            model.ResendCooldownSeconds = Math.Max(0, 60 - elapsed);
+
+            if (DateTime.UtcNow > pending.OtpExpiry)
+            {
+                ModelState.AddModelError("OtpCode", "Mã OTP đã hết hiệu lực (quá 5 phút). Vui lòng nhấn 'Gửi lại mã OTP'.");
+                return View(model);
+            }
+
+            pending.AttemptCount++;
+            if (pending.AttemptCount > 5)
+            {
+                HttpContext.Session.Remove("PendingRegistration");
+                TempData["ErrorMessage"] = "Bạn đã nhập sai mã OTP quá 5 lần. Vui lòng thực hiện đăng ký lại từ đầu để bảo vệ an toàn.";
+                return RedirectToAction("Register");
+            }
+
+            var inputOtp = model.OtpCode?.Trim() ?? string.Empty;
+            if (inputOtp != pending.OtpCode)
+            {
+                HttpContext.Session.SetString("PendingRegistration", JsonSerializer.Serialize(pending));
+                ModelState.AddModelError("OtpCode", $"Mã OTP không chính xác. Bạn còn {5 - pending.AttemptCount} lần thử.");
+                return View(model);
+            }
+
+            // Kiểm tra trùng lặp lần cuối trước khi tạo User chính thức
+            if (await _context.Users.AnyAsync(u => u.Username.ToLower() == pending.Username.ToLower()))
+            {
+                HttpContext.Session.Remove("PendingRegistration");
+                TempData["ErrorMessage"] = "Tên tài khoản này vừa có người đăng ký. Vui lòng chọn tên khác.";
+                return RedirectToAction("Register");
+            }
+
+            if (await _context.Users.AnyAsync(u => u.Email != null && u.Email.ToLower() == pending.Email.ToLower()))
+            {
+                HttpContext.Session.Remove("PendingRegistration");
+                TempData["ErrorMessage"] = "Email này đã được sử dụng. Vui lòng kiểm tra lại.";
+                return RedirectToAction("Register");
             }
 
             var newUser = new User
             {
-                Username = username,
-                Email = email,
-                Phone = model.Phone.Trim(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password),
+                Username = pending.Username,
+                Email = pending.Email,
+                Phone = pending.Phone,
+                PasswordHash = pending.PasswordHash,
                 Role = "member",
                 Status = "active",
                 Balance = 0,
@@ -188,7 +358,10 @@ namespace CyberGame.Controllers
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
 
-            // Tự động đăng nhập sau khi đăng ký
+            // Xóa session đăng ký tạm thời
+            HttpContext.Session.Remove("PendingRegistration");
+
+            // Tự động đăng nhập sau khi xác thực thành công
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, newUser.UserId.ToString()),
@@ -196,6 +369,11 @@ namespace CyberGame.Controllers
                 new Claim(ClaimTypes.Role, newUser.Role),
                 new Claim("Balance", "0")
             };
+            if (!string.IsNullOrEmpty(newUser.Email))
+            {
+                claims.Add(new Claim(ClaimTypes.Email, newUser.Email));
+            }
+
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(claimsIdentity));
@@ -204,7 +382,65 @@ namespace CyberGame.Controllers
             HttpContext.Session.SetString("Username", newUser.Username);
             HttpContext.Session.SetString("Role", newUser.Role);
 
+            TempData["SuccessMessage"] = $"Xác thực email thành công! Chào mừng game thủ {newUser.Username} đã gia nhập hệ thống Cyber Game.";
             return RedirectToAction("Index", "Home");
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ResendOtp()
+        {
+            var pendingJson = HttpContext.Session.GetString("PendingRegistration");
+            if (string.IsNullOrEmpty(pendingJson))
+            {
+                return Json(new { success = false, message = "Phiên đăng ký đã kết thúc. Vui lòng đăng ký lại." });
+            }
+
+            PendingRegistration? pending;
+            try
+            {
+                pending = JsonSerializer.Deserialize<PendingRegistration>(pendingJson);
+            }
+            catch
+            {
+                return Json(new { success = false, message = "Không tìm thấy dữ liệu đăng ký hợp lệ." });
+            }
+
+            if (pending == null)
+            {
+                return Json(new { success = false, message = "Không tìm thấy dữ liệu đăng ký." });
+            }
+
+            var elapsedSinceLastSend = (DateTime.UtcNow - pending.LastSentAt).TotalSeconds;
+            if (elapsedSinceLastSend < 60)
+            {
+                var waitSec = 60 - (int)elapsedSinceLastSend;
+                return Json(new { success = false, message = $"Vui lòng đợi thêm {waitSec} giây trước khi gửi lại mã mới." });
+            }
+
+            var newOtp = Random.Shared.Next(100000, 999999).ToString();
+            pending.OtpCode = newOtp;
+            pending.OtpExpiry = DateTime.UtcNow.AddMinutes(5);
+            pending.LastSentAt = DateTime.UtcNow;
+            pending.AttemptCount = 0;
+
+            HttpContext.Session.SetString("PendingRegistration", JsonSerializer.Serialize(pending));
+
+            var (sent, errorMsg) = await _emailService.SendOtpEmailAsync(pending.Email, pending.Username, newOtp, 5);
+
+            return Json(new
+            {
+                success = true,
+                message = sent ? "Mã OTP mới đã được gửi tới email của bạn." : (errorMsg ?? "Đã tạo mã OTP mới thành công."),
+                cooldown = 60,
+                expirySeconds = 300
+            });
+        }
+
+        [HttpGet]
+        public IActionResult CancelRegistration()
+        {
+            // Cho phép người dùng quay lại sửa thông tin email hoặc số điện thoại
+            return RedirectToAction("Register");
         }
 
         public async Task<IActionResult> Logout()

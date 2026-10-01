@@ -1,0 +1,294 @@
+@model CyberGame.Models.ViewModels.VerifyOtpViewModel
+@{
+    ViewData["Title"] = "Xác thực email đăng ký";
+    Layout = "_AuthLayout";
+}
+
+<main>
+<section class="auth"><div class="auth-grid">
+
+<div class="auth-form-panel"><div class="auth-box">
+    <p class="eyebrow">BẢO MẬT & XÁC THỰC</p>
+    <h2>XÁC THỰC EMAIL</h2>
+    <p class="sub">Vui lòng nhập mã OTP 6 chữ số vừa được gửi đến hòm thư của bạn để hoàn tất đăng ký tài khoản.</p>
+
+    <!-- Email address badge -->
+    <div class="email-display-badge">
+        <span class="email-icon">✉️</span>
+        <div>
+            <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px">Mã được gửi đến</div>
+            <div class="email-text">@Model.Email</div>
+        </div>
+    </div>
+
+    @if (TempData["EmailWarning"] != null)
+    {
+        <div style="color:#f59e0b;font-size:12px;margin-bottom:15px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);padding:10px 12px;border-radius:6px;display:flex;align-items:center;gap:8px;">
+            <span>ℹ️</span> <span>@TempData["EmailWarning"]</span>
+        </div>
+    }
+
+    <form asp-controller="Account" asp-action="VerifyOtp" method="post" id="otpForm" autocomplete="off">
+        <div asp-validation-summary="ModelOnly" class="text-danger" style="color:#ef4444;font-size:13px;margin-bottom:15px;background:rgba(239,68,68,0.1);padding:10px;border-radius:6px"></div>
+        <span asp-validation-for="OtpCode" class="text-danger" style="color:#ef4444;font-size:12px;display:block;margin-bottom:10px"></span>
+
+        <!-- Hidden input for model binding -->
+        <input type="hidden" asp-for="OtpCode" id="hiddenOtpInput" />
+
+        <!-- 6 OTP Input Boxes -->
+        <div class="otp-inputs-wrapper" id="otpInputsContainer">
+            <input type="text" maxlength="1" class="otp-digit" data-index="0" inputmode="numeric" pattern="[0-9]*" autofocus autocomplete="one-time-code" />
+            <input type="text" maxlength="1" class="otp-digit" data-index="1" inputmode="numeric" pattern="[0-9]*" />
+            <input type="text" maxlength="1" class="otp-digit" data-index="2" inputmode="numeric" pattern="[0-9]*" />
+            <input type="text" maxlength="1" class="otp-digit" data-index="3" inputmode="numeric" pattern="[0-9]*" />
+            <input type="text" maxlength="1" class="otp-digit" data-index="4" inputmode="numeric" pattern="[0-9]*" />
+            <input type="text" maxlength="1" class="otp-digit" data-index="5" inputmode="numeric" pattern="[0-9]*" />
+        </div>
+
+        <!-- Meta row: countdown timer & resend button -->
+        <div class="otp-meta-row">
+            <div class="otp-timer">
+                <span>Hiệu lực còn:</span>
+                <b id="expiryCountdown">05:00</b>
+            </div>
+            <button type="button" id="btnResend" class="btn-resend" disabled>
+                GỬI LẠI MÃ (<span id="resendCountdown">@Model.ResendCooldownSeconds</span>s)
+            </button>
+        </div>
+
+        <div id="resendStatusAlert" style="display:none;font-size:12px;padding:8px 12px;border-radius:6px;margin-bottom:15px;"></div>
+
+        <button type="submit" id="btnSubmitOtp" class="btn blue block" style="font-weight:800;letter-spacing:1px;height:48px;">
+            XÁC NHẬN & HOÀN TẤT ĐĂNG KÝ →
+        </button>
+    </form>
+
+    <div class="switch-line" style="margin-top:24px;">
+        Email không chính xác? <a asp-controller="Account" asp-action="CancelRegistration">Quay lại sửa thông tin</a>
+    </div>
+</div></div>
+
+<div class="auth-visual">
+    <div class="brand">
+        <div class="mark-big">CG</div>
+        <p class="eyebrow">XÁC THỰC DANH TÍNH</p>
+        <h1>BẢO VỆ<br>TÀI KHOẢN<span>.</span></h1>
+        <p>Xác thực email giúp bảo đảm an toàn cho số dư ví, quyền lợi thành viên và thông tin đăng nhập của bạn.</p>
+    </div>
+    <div class="auth-perks">
+        <div><i>01</i>Bảo vệ an toàn số dư tài khoản và giao dịch nạp tiền</div>
+        <div><i>02</i>Dễ dàng lấy lại mật khẩu khi không may quên hoặc mất quyền truy cập</div>
+        <div><i>03</i>Nhận thông báo đặt chỗ máy và giftcode độc quyền qua email</div>
+    </div>
+</div>
+
+</div></section>
+</main>
+
+@section Scripts {
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const digitInputs = Array.from(document.querySelectorAll(".otp-digit"));
+    const hiddenOtpInput = document.getElementById("hiddenOtpInput");
+    const otpForm = document.getElementById("otpForm");
+    const expiryCountdownEl = document.getElementById("expiryCountdown");
+    const resendCountdownEl = document.getElementById("resendCountdown");
+    const btnResend = document.getElementById("btnResend");
+    const resendStatusAlert = document.getElementById("resendStatusAlert");
+
+    let remainingSeconds = @Model.RemainingSeconds;
+    let resendCooldown = @Model.ResendCooldownSeconds;
+
+    // Focus first input automatically
+    if (digitInputs.length > 0) {
+        digitInputs[0].focus();
+    }
+
+    function syncOtp() {
+        const otpValue = digitInputs.map(input => input.value.trim()).join("");
+        hiddenOtpInput.value = otpValue;
+        return otpValue;
+    }
+
+    // Handle input, paste, and navigation
+    digitInputs.forEach((input, idx) => {
+        input.addEventListener("input", function (e) {
+            const val = this.value.replace(/[^0-9]/g, "");
+            this.value = val ? val.slice(-1) : "";
+
+            if (this.value) {
+                this.classList.add("filled");
+                if (idx < digitInputs.length - 1) {
+                    digitInputs[idx + 1].focus();
+                }
+            } else {
+                this.classList.remove("filled");
+            }
+
+            const code = syncOtp();
+            if (code.length === 6) {
+                // Auto submit form when 6 digits are fully filled
+                setTimeout(() => {
+                    otpForm.submit();
+                }, 200);
+            }
+        });
+
+        input.addEventListener("keydown", function (e) {
+            if (e.key === "Backspace") {
+                if (!this.value && idx > 0) {
+                    digitInputs[idx - 1].focus();
+                    digitInputs[idx - 1].value = "";
+                    digitInputs[idx - 1].classList.remove("filled");
+                    syncOtp();
+                } else {
+                    this.value = "";
+                    this.classList.remove("filled");
+                    syncOtp();
+                }
+            } else if (e.key === "ArrowLeft" && idx > 0) {
+                digitInputs[idx - 1].focus();
+            } else if (e.key === "ArrowRight" && idx < digitInputs.length - 1) {
+                digitInputs[idx + 1].focus();
+            }
+        });
+
+        input.addEventListener("paste", function (e) {
+            e.preventDefault();
+            const pastedText = (e.clipboardData || window.clipboardData).getData("text").replace(/[^0-9]/g, "");
+            if (!pastedText) return;
+
+            const digits = pastedText.slice(0, 6).split("");
+            digits.forEach((digit, i) => {
+                if (digitInputs[i]) {
+                    digitInputs[i].value = digit;
+                    digitInputs[i].classList.add("filled");
+                }
+            });
+
+            syncOtp();
+
+            const nextFocus = Math.min(digits.length, digitInputs.length - 1);
+            digitInputs[nextFocus].focus();
+
+            if (digits.length === 6) {
+                setTimeout(() => {
+                    otpForm.submit();
+                }, 200);
+            }
+        });
+    });
+
+    otpForm.addEventListener("submit", function (e) {
+        const code = syncOtp();
+        if (code.length < 6) {
+            e.preventDefault();
+            alert("Vui lòng nhập đủ 6 chữ số mã OTP.");
+            const emptyInput = digitInputs.find(i => !i.value);
+            if (emptyInput) emptyInput.focus();
+        }
+    });
+
+    // Formats seconds into MM:SS
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+        const s = (seconds % 60).toString().padStart(2, "0");
+        return `${m}:${s}`;
+    }
+
+    // Expiry timer
+    const expiryInterval = setInterval(() => {
+        if (remainingSeconds > 0) {
+            remainingSeconds--;
+            expiryCountdownEl.textContent = formatTime(remainingSeconds);
+        } else {
+            clearInterval(expiryInterval);
+            expiryCountdownEl.textContent = "00:00 (Hết hạn)";
+            expiryCountdownEl.style.color = "#ef4444";
+        }
+    }, 1000);
+    expiryCountdownEl.textContent = formatTime(remainingSeconds);
+
+    // Resend cooldown timer
+    function startResendCooldown(seconds) {
+        resendCooldown = seconds;
+        btnResend.disabled = true;
+
+        const resendInterval = setInterval(() => {
+            if (resendCooldown > 0) {
+                resendCooldown--;
+                resendCountdownEl.textContent = resendCooldown;
+                btnResend.innerHTML = `GỬI LẠI MÃ (<span id="resendCountdown">${resendCooldown}</span>s)`;
+            } else {
+                clearInterval(resendInterval);
+                btnResend.disabled = false;
+                btnResend.innerHTML = "GỬI LẠI MÃ OTP";
+            }
+        }, 1000);
+    }
+
+    if (resendCooldown > 0) {
+        startResendCooldown(resendCooldown);
+    } else {
+        btnResend.disabled = false;
+        btnResend.innerHTML = "GỬI LẠI MÃ OTP";
+    }
+
+    // Resend OTP AJAX
+    btnResend.addEventListener("click", async function () {
+        if (btnResend.disabled) return;
+
+        btnResend.disabled = true;
+        btnResend.textContent = "Đang gửi lại...";
+
+        try {
+            const response = await fetch("/Account/ResendOtp", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                resendStatusAlert.style.display = "block";
+                resendStatusAlert.style.background = "rgba(16, 185, 129, 0.15)";
+                resendStatusAlert.style.border = "1px solid rgba(16, 185, 129, 0.4)";
+                resendStatusAlert.style.color = "#34d399";
+                resendStatusAlert.innerHTML = `✓ ${data.message}`;
+
+                // Reset inputs and timer
+                digitInputs.forEach(i => {
+                    i.value = "";
+                    i.classList.remove("filled");
+                });
+                syncOtp();
+                digitInputs[0].focus();
+
+                remainingSeconds = data.expirySeconds || 300;
+                expiryCountdownEl.textContent = formatTime(remainingSeconds);
+                expiryCountdownEl.style.color = "#f59e0b";
+
+                startResendCooldown(data.cooldown || 60);
+            } else {
+                resendStatusAlert.style.display = "block";
+                resendStatusAlert.style.background = "rgba(239, 68, 68, 0.15)";
+                resendStatusAlert.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+                resendStatusAlert.style.color = "#f87171";
+                resendStatusAlert.innerHTML = `⚠️ ${data.message}`;
+                btnResend.disabled = false;
+                btnResend.innerHTML = "GỬI LẠI MÃ OTP";
+            }
+        } catch (err) {
+            resendStatusAlert.style.display = "block";
+            resendStatusAlert.style.background = "rgba(239, 68, 68, 0.15)";
+            resendStatusAlert.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+            resendStatusAlert.style.color = "#f87171";
+            resendStatusAlert.innerHTML = "⚠️ Không thể kết nối đến máy chủ. Vui lòng thử lại.";
+            btnResend.disabled = false;
+            btnResend.innerHTML = "GỬI LẠI MÃ OTP";
+        }
+    });
+});
+</script>
+}
