@@ -393,6 +393,17 @@ public partial class CyberGameDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("datetime")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.SepayTransactionId).HasColumnName("sepay_transaction_id");
+            entity.Property(e => e.ReferenceCode)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("reference_code");
+            entity.Property(e => e.Content)
+                .HasMaxLength(500)
+                .HasColumnName("content");
+            entity.Property(e => e.PaidAt)
+                .HasColumnType("datetime")
+                .HasColumnName("paid_at");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
             entity.HasOne(d => d.Method).WithMany(p => p.Recharges)

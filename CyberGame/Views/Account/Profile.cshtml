@@ -3,6 +3,7 @@
     ViewData["Title"] = "Hồ sơ cá nhân & Ví Cyber";
     var user = Model.User;
 }
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 
 <div class="profile-page">
     <div class="profile-hero">
@@ -205,9 +206,6 @@
                                 <button type="button" class="btn blue block" id="btnOpenQrModal" onclick="triggerShowQrCode()">
                                     ⚡ QUÉT MÃ QR NẠP TIỀN
                                 </button>
-                                <button type="button" class="btn outline block" id="btnInstantDemoDeposit" onclick="confirmInstantDeposit()">
-                                    ✨ NẠP THỬ NGHIỆM TRỰC TIẾP (DEMO TEST)
-                                </button>
                             </div>
                         </div>
 
@@ -219,11 +217,14 @@
                                         <span class="mark">CG</span>
                                         <b>CYBER<span>GAME</span> VIETQR</b>
                                     </div>
-                                    <span class="bill-status-pill">CHỜ THANH TOÁN</span>
+                                    <span class="bill-status-pill" id="depositPill">CHỜ TẠO MÃ</span>
                                 </div>
 
                                 <div class="qr-image-container">
-                                    <img id="dynamicQrImg" src="https://img.vietqr.io/image/MB-0868889999-compact2.png?amount=100000&addInfo=CG%20NAP%20@(user.Username)&accountName=CYBERGAME%20STADIUM" alt="Mã VietQR nạp tiền" />
+                                    <img id="dynamicQrImg"
+                                         src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                                         style="opacity:.15;min-height:220px;background:#1a1e24"
+                                         alt="Mã VietQR nạp tiền" />
                                     <div class="qr-scan-guide">
                                         <small>Mở ứng dụng Ngân hàng hoặc MoMo để quét mã</small>
                                     </div>
@@ -236,13 +237,13 @@
                                     </div>
                                     <div class="bill-row">
                                         <span>Số tài khoản:</span>
-                                        <strong class="copyable-text" onclick="copyToClipboard('0868889999', 'Đã sao chép số tài khoản!')">
-                                            <span id="qrStkText">0868889999</span> 📋
+                                        <strong class="copyable-text" onclick="copyToClipboard('@Config["SePay:AccountNumber"]', 'Đã sao chép số tài khoản!')">
+                                            <span id="qrStkText">@Config["SePay:AccountNumber"]</span> 📋
                                         </strong>
                                     </div>
                                     <div class="bill-row">
                                         <span>Tên chủ tài khoản:</span>
-                                        <strong>CYBERGAME STADIUM</strong>
+                                        <strong>@Config["SePay:AccountName"]</strong>
                                     </div>
                                     <div class="bill-row">
                                         <span>Số tiền nạp:</span>
@@ -251,16 +252,16 @@
                                     <div class="bill-row">
                                         <span>Nội dung chuyển khoản:</span>
                                         <strong class="copyable-text memo-highlight" onclick="copyToClipboard(document.getElementById('qrMemoText').textContent, 'Đã sao chép nội dung!')">
-                                            <span id="qrMemoText">CG NAP @user.Username</span> 📋
+                                            <span id="qrMemoText">(bấm QUÉT MÃ QR để nhận nội dung)</span>
                                         </strong>
                                     </div>
                                 </div>
 
                                 <div class="bill-footer-note">
-                                    <p>💡 Tiền sẽ được cộng tự động vào tài khoản ngay sau khi hệ thống nhận được giao dịch. Nếu quá 3 phút chưa thấy tiền vào ví, vui lòng bấm nút bên dưới.</p>
-                                    <button type="button" class="btn blue btn-sm block" onclick="confirmInstantDeposit()">
-                                        ✓ XÁC NHẬN ĐÃ CHUYỂN KHOẢN (HOÀN TẤT NẠP)
-                                    </button>
+                                    <p>💡 Tiền sẽ được cộng tự động vào ví ngay sau khi hệ thống nhận được giao dịch. Vui lòng giữ nguyên nội dung chuyển khoản.</p>
+                                    <div id="depositStatusText" style="font-size:13px;font-weight:600;text-align:center;color:#a1aab5">
+                                        Bấm "QUÉT MÃ QR NẠP TIỀN" để tạo mã nạp tiền.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1777,97 +1778,140 @@
                 });
             });
         }
+        let depositPollTimer = null;
+        const QR_PLACEHOLDER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
+        // Đổi số tiền thì mã cũ không còn dùng: về trạng thái chờ tạo mã
         function updateVietQrPreview() {
-            const amtDisplay = document.getElementById("qrAmountDisplay");
-            const qrImg = document.getElementById("dynamicQrImg");
+            if (depositPollTimer) { clearInterval(depositPollTimer); depositPollTimer = null; }
             const amt = currentSelectedAmount > 0 ? currentSelectedAmount : 100000;
-
-            if (amtDisplay) {
-                amtDisplay.textContent = new Intl.NumberFormat('vi-VN').format(amt) + ' VNĐ';
-            }
-
-            const username = window.CURRENT_USERNAME || "@user.Username";
-            const memo = `CG NAP ${username}`;
-            const qrUrl = `https://img.vietqr.io/image/MB-0868889999-compact2.png?amount=${amt}&addInfo=${encodeURIComponent(memo)}&accountName=CYBERGAME%20STADIUM`;
-
-            if (qrImg) {
-                qrImg.src = qrUrl;
-            }
+            const amtDisplay = document.getElementById("qrAmountDisplay");
+            if (amtDisplay) amtDisplay.textContent = new Intl.NumberFormat('vi-VN').format(amt) + ' VNĐ';
+            const qrImg = document.getElementById("dynamicQrImg");
+            if (qrImg) { qrImg.src = QR_PLACEHOLDER; qrImg.style.opacity = 0.15; }
+            const memo = document.getElementById("qrMemoText");
+            if (memo) memo.textContent = "(bấm QUÉT MÃ QR để nhận nội dung)";
+            const pill = document.getElementById("depositPill");
+            if (pill) pill.textContent = "CHỜ TẠO MÃ";
+            const st = document.getElementById("depositStatusText");
+            if (st) { st.textContent = 'Bấm "QUÉT MÃ QR NẠP TIỀN" để tạo mã nạp tiền.'; st.style.color = "#a1aab5"; }
         }
 
-        function triggerShowQrCode() {
-            updateVietQrPreview();
-            const previewBox = document.querySelector(".deposit-preview-box");
-            if (previewBox) {
-                previewBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                showToast("Vui lòng quét mã QR bên dưới để nạp " + new Intl.NumberFormat('vi-VN').format(currentSelectedAmount) + " đ!", "success");
-            }
-        }
-
-        async function confirmInstantDeposit() {
+        async function triggerShowQrCode() {
             if (currentSelectedAmount < 10000) {
                 showToast("Số tiền nạp tối thiểu là 10.000 VNĐ.", "error");
                 return;
             }
 
-            const selectedMethodRadio = document.querySelector("input[name='payMethod']:checked");
-            const methodId = selectedMethodRadio ? parseInt(selectedMethodRadio.value) : 2;
+            const sel = document.querySelector("input[name='payMethod']:checked");
+            if (sel && sel.dataset.code && sel.dataset.code !== "BANK_QR") {
+                showToast("Phương thức này chưa hỗ trợ nạp tự động. Vui lòng chọn Chuyển khoản VietQR hoặc nạp tại quầy.", "error");
+                return;
+            }
 
-            const btn = document.getElementById("btnInstantDemoDeposit");
-            const originalText = btn.textContent;
+            const btn = document.getElementById("btnOpenQrModal");
             btn.disabled = true;
-            btn.textContent = "⏳ Đang xử lý giao dịch...";
-
             try {
                 const res = await fetch("/Account/Deposit", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        amount: currentSelectedAmount,
-                        methodId: methodId,
-                        note: "Nạp ví trực tuyến"
-                    })
+                    body: JSON.stringify({ amount: currentSelectedAmount })
                 });
-
                 const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, "success");
-
-                    // Cập nhật số dư trên giao diện
-                    if (data.newBalanceFormatted) {
-                        const cardBal = document.getElementById("walletCardBalance");
-                        const statBal = document.getElementById("statCurrentBalance");
-                        const headerBal = document.getElementById("headerBalanceDisplay");
-
-                        if (cardBal) cardBal.innerHTML = `${data.newBalance.toLocaleString('vi-VN')} <span class="currency">VNĐ</span>`;
-                        if (statBal) statBal.textContent = data.newBalanceFormatted;
-                        if (headerBal) headerBal.textContent = data.newBalanceFormatted;
-                    }
-
-                    // Tự động thêm bản ghi vào bảng giao dịch
-                    const tbody = document.getElementById("transactionsTbody");
-                    if (tbody) {
-                        const tr = document.createElement("tr");
-                        tr.innerHTML = `
-                            <td><span class="mono-code">#TX-NEW</span></td>
-                            <td><span class="trans-type-pill plus">📥 Nạp tiền ví</span></td>
-                            <td><strong class="amount-plus">+${data.amount.toLocaleString('vi-VN')} đ</strong></td>
-                            <td>${data.createdAt || "Vừa xong"}</td>
-                            <td><span class="badge-success">Thành công</span></td>
-                        `;
-                        tbody.prepend(tr);
-                    }
-                } else {
-                    showToast(data.message || "Giao dịch không thành công.", "error");
+                if (!data.success) {
+                    showToast(data.message || "Không tạo được lệnh nạp.", "error");
+                    return;
                 }
+
+                const qrImg = document.getElementById("dynamicQrImg");
+                qrImg.src = data.qrUrl;
+                qrImg.style.opacity = 1;
+                document.getElementById("qrMemoText").textContent = data.transactionCode;
+                document.getElementById("qrAmountDisplay").textContent =
+                    new Intl.NumberFormat('vi-VN').format(data.amount) + ' VNĐ';
+                document.getElementById("depositPill").textContent = "CHỜ THANH TOÁN";
+                const st = document.getElementById("depositStatusText");
+                st.style.color = "#f59e0b";
+                st.textContent = "⏳ Đang chờ thanh toán... (vui lòng không đóng trang)";
+
+                document.querySelector(".deposit-preview-box")
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+                startDepositPolling(data.rechargeId);
             } catch (err) {
                 showToast("Lỗi kết nối máy chủ: " + err.message, "error");
             } finally {
                 btn.disabled = false;
-                btn.textContent = originalText;
             }
         }
+
+        function startDepositPolling(rechargeId) {
+            if (depositPollTimer) clearInterval(depositPollTimer);
+            let tries = 0;
+            let busy = false;
+
+            depositPollTimer = setInterval(async () => {
+                if (busy) return;
+                busy = true;
+                tries++;
+                try {
+                    const r = await fetch(`/Account/DepositStatus?rechargeId=${rechargeId}`);
+                    const d = await r.json();
+
+                    if (d.success && d.status === "completed") {
+                        clearInterval(depositPollTimer); depositPollTimer = null;
+                        showDepositSuccess(d);
+                    } else if (d.success && (d.status === "failed" || d.status === "cancelled")) {
+                        clearInterval(depositPollTimer); depositPollTimer = null;
+                        document.getElementById("depositPill").textContent = "THẤT BẠI";
+                        const st = document.getElementById("depositStatusText");
+                        st.style.color = "#ef4444";
+                        st.textContent = "❌ Giao dịch không thành công. Vui lòng tạo lại mã nạp.";
+                    } else if (tries >= 100) {   // ~5 phút
+                        clearInterval(depositPollTimer); depositPollTimer = null;
+                        const st = document.getElementById("depositStatusText");
+                        st.style.color = "#a1aab5";
+                        st.textContent = "Chưa nhận được tiền. Nếu bạn đã chuyển khoản, tiền sẽ tự vào ví khi hệ thống nhận được; hoặc liên hệ nhân viên.";
+                    }
+                } catch (e) {
+                    /* mạng chập chờn: thử lại lần sau */
+                } finally {
+                    busy = false;
+                }
+            }, 3000);
+        }
+
+        function showDepositSuccess(d) {
+            document.getElementById("depositPill").textContent = "ĐÃ THANH TOÁN";
+            const st = document.getElementById("depositStatusText");
+            st.style.color = "#10b981";
+            st.innerHTML = `✅ Thanh toán thành công<br><strong>+${Number(d.amount).toLocaleString('vi-VN')} đ</strong><br>Số dư mới: <strong>${d.newBalanceFormatted}</strong>`;
+            showToast(`Đã nhận ${Number(d.amount).toLocaleString('vi-VN')} đ. Số dư mới: ${d.newBalanceFormatted}`, "success");
+
+            const cardBal = document.getElementById("walletCardBalance");
+            const statBal = document.getElementById("statCurrentBalance");
+            const headerBal = document.getElementById("headerBalanceDisplay");
+            if (cardBal) cardBal.innerHTML = `${Number(d.newBalance).toLocaleString('vi-VN')} <span class="currency">VNĐ</span>`;
+            if (statBal) statBal.textContent = d.newBalanceFormatted;
+            if (headerBal) headerBal.textContent = d.newBalanceFormatted;
+
+            const tbody = document.getElementById("transactionsTbody");
+            if (tbody) {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><span class="mono-code">#TX-NEW</span></td>
+                    <td><span class="trans-type-pill plus">📥 Nạp tiền ví</span></td>
+                    <td><strong class="amount-plus">+${Number(d.amount).toLocaleString('vi-VN')} đ</strong></td>
+                    <td>Vừa xong</td>
+                    <td><span class="badge-success">Thành công</span></td>`;
+                tbody.prepend(tr);
+            }
+        }
+        
+
+       
+
+        
 
         async function handleUpdateProfile(e) {
             e.preventDefault();
