@@ -52,7 +52,10 @@ namespace CyberGame.Services
 
             // 2) Đến giờ hẹn và còn trong thời gian giữ chỗ -> máy chuyển in_use
             var startedIds = await db.Bookings
-                .Where(b => b.Status == "pending" && b.StartTime <= now && b.HoldExpiresAt > now)
+                .Where(b => (b.Status == "pending" || b.Status == "confirmed")
+                         && b.StartTime <= now
+                         && b.EndTime > now
+                         && (b.Status == "confirmed" || b.HoldExpiresAt > now))
                 .Select(b => b.ComputerId).Distinct()
                 .ToListAsync(ct);
 

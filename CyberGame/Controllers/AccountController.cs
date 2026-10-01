@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -21,17 +22,20 @@ namespace CyberGame.Controllers
     public class AccountController : Controller
     {
         private readonly CyberGameDbContext _context;
+        private readonly IConfiguration _config;
         private readonly IEmailService _emailService;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<AccountController> _logger;
 
         public AccountController(
             CyberGameDbContext context,
+            IConfiguration config,
             IEmailService emailService,
             IWebHostEnvironment env,
             ILogger<AccountController> logger)
         {
             _context = context;
+            _config = config;
             _emailService = emailService;
             _env = env;
             _logger = logger;
@@ -718,66 +722,99 @@ namespace CyberGame.Controllers
         {
             var userId = GetCurrentUserId();
             if (userId == null)
-            {
                 return Json(new { success = false, message = "Vui lòng đăng nhập để nạp tiền." });
-            }
 
-            if (dto.Amount < 10000)
-            {
-                return Json(new { success = false, message = "Số tiền nạp tối thiểu là 10.000 VNĐ." });
-            }
+            decimal min = _config.GetValue<decimal>("SePay:MinAmount", 10000);
+            decimal max = _config.GetValue<decimal>("SePay:MaxAmount", 50000000);
+            if (dto == null || dto.Amount < min || dto.Amount > max || dto.Amount != decimal.Truncate(dto.Amount))
+                return Json(new { success = false, message = $"Số tiền nạp phải từ {min:N0} đến {max:N0} VNĐ." });
 
-            var user = await _context.Users.FindAsync(userId.Value);
-            if (user == null)
-            {
+            // userId luôn lấy từ phiên đăng nhập, không nhận từ client
+            if (!await _context.Users.AnyAsync(u => u.UserId == userId.Value))
                 return Json(new { success = false, message = "Tài khoản không tồn tại." });
-            }
 
-            var method = await _context.PaymentMethods.FindAsync(dto.MethodId)
-                         ?? await _context.PaymentMethods.FirstOrDefaultAsync(p => p.Code == "BANK_QR")
-                         ?? await _context.PaymentMethods.FirstOrDefaultAsync();
+            // Chống spam tạo lệnh nạp
+            var since = DateTime.UtcNow.AddMinutes(-30);
+            int pendingCount = await _context.Recharges.CountAsync(r =>
+                r.UserId == userId.Value && r.Status == "pending" && r.CreatedAt > since);
+            if (pendingCount >= 5)
+                return Json(new { success = false, message = "Bạn đang có quá nhiều lệnh nạp chờ thanh toán, vui lòng thử lại sau ít phút." });
 
-            int methodId = method?.MethodId ?? 1;
-            string transCode = "CG" + DateTime.UtcNow.ToString("yyMMddHHmmss") + "_" + user.UserId;
-
-            user.Balance += dto.Amount;
+            // Chuyển khoản tự động chỉ áp dụng cho phương thức BANK_QR
+            var method = await _context.PaymentMethods.FirstOrDefaultAsync(p => p.Code == "BANK_QR");
+            if (method == null)
+                return Json(new { success = false, message = "Chưa cấu hình phương thức chuyển khoản." });
 
             var recharge = new Recharge
             {
-                UserId = user.UserId,
-                MethodId = methodId,
+                UserId = userId.Value,
+                MethodId = method.MethodId,
                 Amount = dto.Amount,
-                Status = "completed",
-                TransactionCode = transCode,
+                Status = "pending",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
             _context.Recharges.Add(recharge);
             await _context.SaveChangesAsync();
 
-            var walletTrans = new WalletTransaction
-            {
-                UserId = user.UserId,
-                Type = "recharge",
-                Amount = dto.Amount,
-                ReferenceId = recharge.RechargeId,
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.WalletTransactions.Add(walletTrans);
+            // Mã không dấu, không ký tự đặc biệt để ngân hàng không làm hỏng nội dung CK
+            string prefix = _config["SePay:CodePrefix"] ?? "CG";
+            recharge.TransactionCode = prefix + recharge.RechargeId.ToString("D6");
             await _context.SaveChangesAsync();
 
-            HttpContext.Session.SetString("Balance", user.Balance.ToString());
+            string bank = _config["SePay:BankCode"] ?? "";
+            string acc = _config["SePay:AccountNumber"] ?? "";
+            string accName = _config["SePay:AccountName"] ?? "";
+            string qrUrl = $"https://img.vietqr.io/image/{bank}-{acc}-compact2.png" +
+                           $"?amount={(long)recharge.Amount}" +
+                           $"&addInfo={Uri.EscapeDataString(recharge.TransactionCode)}" +
+                           $"&accountName={Uri.EscapeDataString(accName)}";
 
             return Json(new
             {
                 success = true,
-                newBalance = user.Balance,
-                newBalanceFormatted = user.Balance.ToString("N0") + " đ",
-                amount = dto.Amount,
-                transactionCode = transCode,
-                methodName = method?.Name ?? "Chuyển khoản QR",
-                createdAt = recharge.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"),
-                message = $"Nạp thành công {dto.Amount:N0} đ vào tài khoản! Số dư hiện tại: {user.Balance:N0} đ"
+                rechargeId = recharge.RechargeId,
+                transactionCode = recharge.TransactionCode,
+                amount = recharge.Amount,
+                qrUrl,
+                accountNumber = acc,
+                accountName = accName
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DepositStatus(int rechargeId)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null) return Json(new { success = false });
+
+            // Chỉ cho xem lệnh nạp của chính mình
+            var r = await _context.Recharges.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.RechargeId == rechargeId && x.UserId == userId.Value);
+            if (r == null) return Json(new { success = false });
+
+            decimal? bal = null;
+            if (r.Status == "completed")
+            {
+                bal = await _context.Users.Where(u => u.UserId == userId.Value)
+                    .Select(u => u.Balance).FirstAsync();
+                HttpContext.Session.SetString("Balance", bal.Value.ToString());
+            }
+
+            return Json(new
+            {
+                success = true,
+                status = r.Status,
+                amount = r.Amount,
+                transactionCode = r.TransactionCode,   
+                content = r.Content,                   
+                referenceCode = r.ReferenceCode,      
+                                                      
+                paidAtUtc = r.PaidAt.HasValue
+        ? DateTime.SpecifyKind(r.PaidAt.Value, DateTimeKind.Utc).ToString("o")
+        : null,
+                newBalance = bal,
+                newBalanceFormatted = bal.HasValue ? bal.Value.ToString("N0") + " đ" : null
             });
         }
 

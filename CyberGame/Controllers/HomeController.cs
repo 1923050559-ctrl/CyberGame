@@ -353,7 +353,7 @@ namespace CyberGame.Controllers
                         ComputerId = cId,
                         StartTime = startTime,
                         EndTime = endTime,
-                        Status = "pending",
+                        Status = deductedAmount > 0 ? "confirmed" : "pending",
                         HoldExpiresAt = startTime.AddMinutes(HoldMinutes),
                         CreatedAt = DateTime.UtcNow
                     };

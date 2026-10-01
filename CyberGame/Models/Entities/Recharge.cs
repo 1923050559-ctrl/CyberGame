@@ -24,4 +24,11 @@ public partial class Recharge
     public virtual PaymentMethod Method { get; set; } = null!;
 
     public virtual User User { get; set; } = null!;
+    public long? SepayTransactionId { get; set; }
+
+    public string? ReferenceCode { get; set; }
+
+    public string? Content { get; set; }
+
+    public DateTime? PaidAt { get; set; }
 }
