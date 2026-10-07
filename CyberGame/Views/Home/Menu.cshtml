@@ -1,17 +1,6 @@
 @model IEnumerable<CyberGame.Models.Entities.Food>
 @{
     ViewData["Title"] = "Thực đơn F&B - CyberGame";
-
-    string FormatImageUrl(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return "https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&w=400&q=80";
-        var match = System.Text.RegularExpressions.Regex.Match(url, @"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)");
-        if (match.Success)
-        {
-            return $"https://lh3.googleusercontent.com/d/{match.Groups[1].Value}";
-        }
-        return url;
-    }
 }
 
 <main id="menuPage">
@@ -34,8 +23,8 @@
         {
             @foreach (var item in Model)
             {
-                <div class="menu-item-card" data-category="@(item.Category?.ToLower().Trim())" style="background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
-                  <div style="height:150px;background-image:url('@FormatImageUrl(item.ImageUrl)');background-size:cover;background-position:center;position:relative;background-color:#1a1e24">
+                <div class="menu-item-card" data-category="@item.Category" style="background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+                  <div style="height:150px;background-image:url('@item.ImageUrl');background-size:cover;background-position:center;position:relative">
                     <span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase">@item.Category</span>
                   </div>
                   <div style="padding:15px;display:flex;flex-direction:column;flex:1">
@@ -127,10 +116,9 @@ document.addEventListener("DOMContentLoaded", function() {
             this.classList.add("blue");
             this.style.background = "";
 
-            const cat = (this.getAttribute("data-filter") || "").toLowerCase().trim();
+            const cat = this.getAttribute("data-filter");
             itemCards.forEach(card => {
-                const cardCat = (card.getAttribute("data-category") || "").toLowerCase().trim();
-                if (cat === "all" || cardCat === cat) {
+                if (cat === "all" || card.getAttribute("data-category") === cat) {
                     card.style.display = "flex";
                 } else {
                     card.style.display = "none";

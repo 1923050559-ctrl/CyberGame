@@ -5,13 +5,11 @@ using System.Collections.Generic;
 using CyberGame.Models;
 using CyberGame.Models.Entities;
 using CyberGame.Models.ViewModels;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace CyberGame.Controllers
 {
-    [Authorize(Roles = "admin")]
     public class AdminController : Controller
     {
         private readonly CyberGameDbContext _context;
@@ -27,15 +25,14 @@ namespace CyberGame.Controllers
                 .Where(s => s.TotalCost.HasValue)
                 .SumAsync(s => (decimal?)s.TotalCost) ?? 0;
 
-            // Chỉ tính tiền thực tế khi kết thúc phiên chơi hoặc booking completed (không tính trước giờ đặt dự kiến của confirmed)
-            var completedBookings = await _context.Bookings
+            var confirmedBookings = await _context.Bookings
                 .Include(b => b.Computer)
                 .ThenInclude(c => c.Zone)
-                .Where(b => b.Status == "completed" && !_context.Sessions.Any(s => s.BookingId == b.BookingId))
+                .Where(b => b.Status == "confirmed" || b.Status == "completed")
                 .ToListAsync();
 
             decimal bookingRevFromBookings = 0;
-            foreach (var b in completedBookings)
+            foreach (var b in confirmedBookings)
             {
                 var price = b.Computer?.Zone?.PricePerHour ?? 20000m;
                 var hours = (b.EndTime.HasValue && b.EndTime > b.StartTime)
@@ -82,6 +79,11 @@ namespace CyberGame.Controllers
         [HttpGet]
         public async Task<IActionResult> GetDashboardStats()
         {
+            // 1. Calculate Booking revenue from both Sessions and confirmed Bookings
+            var sessionRev = await _context.Sessions
+                .Where(s => s.TotalCost.HasValue)
+                .SumAsync(s => (decimal?)s.TotalCost) ?? 0;
+
             var confirmedBookings = await _context.Bookings
                 .Include(b => b.Computer)
                 .ThenInclude(c => c.Zone)
@@ -89,17 +91,8 @@ namespace CyberGame.Controllers
                 .Where(b => b.Status == "confirmed" || b.Status == "completed")
                 .ToListAsync();
 
-            // 1. Calculate Booking revenue: chỉ tính tiền thực tế khi kết thúc phiên chơi (Sessions) hoặc booking completed
-            var sessionRev = await _context.Sessions
-                .Where(s => s.TotalCost.HasValue)
-                .SumAsync(s => (decimal?)s.TotalCost) ?? 0;
-
-            var completedBookings = confirmedBookings
-                .Where(b => b.Status == "completed" && !_context.Sessions.Any(s => s.BookingId == b.BookingId))
-                .ToList();
-
             decimal bookingRevFromBookings = 0;
-            foreach (var b in completedBookings)
+            foreach (var b in confirmedBookings)
             {
                 var price = b.Computer?.Zone?.PricePerHour ?? 20000m;
                 var hours = (b.EndTime.HasValue && b.EndTime > b.StartTime)
@@ -162,7 +155,7 @@ namespace CyberGame.Controllers
                 return 8;
             }
 
-            foreach (var b in completedBookings)
+            foreach (var b in confirmedBookings)
             {
                 int slot = GetHourSlot(b.StartTime.Hour);
                 var price = b.Computer?.Zone?.PricePerHour ?? 20000m;
@@ -577,11 +570,6 @@ namespace CyberGame.Controllers
         [HttpPost]
         public async Task<IActionResult> TopUpBalance([FromBody] TopUpDto dto)
         {
-            if (!User.IsInRole("admin"))
-            {
-                return StatusCode(403, new { success = false, message = "Bạn không có quyền thực hiện thao tác này." });
-            }
-
             if (dto == null || dto.UserId <= 0 || dto.Amount <= 0)
             {
                 return Json(new { success = false, message = "Thông tin nạp tiền không hợp lệ." });
@@ -672,38 +660,6 @@ namespace CyberGame.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> UpdateCustomer([FromBody] UpdateCustomerDto dto)
-        {
-            if (dto == null || dto.Id <= 0)
-            {
-                return Json(new { success = false, message = "Thông tin không hợp lệ." });
-            }
-
-            var user = await _context.Users.FindAsync(dto.Id);
-            if (user == null)
-            {
-                return Json(new { success = false, message = "Không tìm thấy người dùng." });
-            }
-
-            if (!string.IsNullOrWhiteSpace(dto.Email))
-            {
-                user.Email = dto.Email.Trim();
-            }
-            if (!string.IsNullOrWhiteSpace(dto.Phone))
-            {
-                user.Phone = dto.Phone.Trim();
-            }
-            if (!string.IsNullOrWhiteSpace(dto.Status))
-            {
-                var st = dto.Status.Trim().ToLower();
-                user.Status = (st == "locked" || st == "banned") ? "banned" : "active";
-            }
-
-            await _context.SaveChangesAsync();
-            return Json(new { success = true, message = "Cập nhật thông tin tài khoản thành công!" });
-        }
-
-        [HttpPost]
         public async Task<IActionResult> UpdateOrderStatus([FromBody] UpdateOrderStatusDto dto)
         {
             if (dto == null || dto.OrderId <= 0)
@@ -717,9 +673,7 @@ namespace CyberGame.Controllers
                 return Json(new { success = false, message = "Không tìm thấy đơn hàng." });
             }
 
-            var statusVal = dto.Status?.Trim().ToLower() ?? "completed";
-            order.Status = statusVal;
-            order.UpdatedAt = DateTime.UtcNow;
+            order.Status = dto.Status;
             await _context.SaveChangesAsync();
 
             return Json(new { success = true, status = order.Status, message = "Cập nhật trạng thái đơn thành công!" });
@@ -742,7 +696,7 @@ namespace CyberGame.Controllers
             user.Status = "banned";
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true, status = "banned", message = $"Đã khóa tài khoản {user.Username} thành công." });
+            return Json(new { success = true, message = $"Đã khóa tài khoản {user.Username} thành công." });
         }
 
         public async Task<IActionResult> Chat()

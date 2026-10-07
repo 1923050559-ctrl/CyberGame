@@ -51,9 +51,8 @@ namespace CyberGame.Models.ViewModels
 
     public class CreateFoodOrderDto
     {
-        public string? SeatNumber { get; set; }
-        public string? SeatLabel { get; set; }
-        public string PaymentMethod { get; set; } = "CASH";
+        public string SeatNumber { get; set; } = null!;
+        public string PaymentMethod { get; set; } = "cash";
         public List<CartItemDto> Items { get; set; } = new List<CartItemDto>();
     }
 
