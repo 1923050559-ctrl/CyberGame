@@ -28,7 +28,9 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(document.querySelector("#cyberDetail")) renderCyberDetail();
   if(document.querySelector("#gamePage")) renderGamesPage();
   if(document.querySelector("#newsPage")) renderNewsPage();
-  if(document.querySelector("#menuPage")) renderMenuPage();
+  // Trang /Home/Menu được Razor View (Menu.cshtml) render toàn bộ món trực tiếp từ Database (bảng FOODS).
+  // Không gọi renderMenuPage() để tránh ghi đè dữ liệu tĩnh lên dữ liệu thực tế.
+  // if(document.querySelector("#menuPage")) renderMenuPage();
   if(document.querySelector("#articlePage")) renderArticle();
 });
 
@@ -1180,6 +1182,8 @@ function setupChatbot() {
 
 function renderMenuPage() {
   const list = document.querySelector("#fullMenuList");
+  // Nếu đã có dữ liệu món ăn render từ server (Database) thì không ghi đè dữ liệu mẫu
+  if (!list || list.children.length > 0) return;
   const filterBtns = document.querySelectorAll("#menuFilter button");
   const cartItems = document.querySelector("#cartItems");
   const cartTotal = document.querySelector("#cartTotal");

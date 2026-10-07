@@ -481,7 +481,10 @@ namespace CyberGame.Controllers
 
         public async Task<IActionResult> Menu()
         {
-            var foods = await _context.Foods.ToListAsync();
+            var foods = await _context.Foods
+                .Where(f => f.Status == "available")
+                .OrderBy(f => f.FoodId)
+                .ToListAsync();
             return View(foods);
         }
 
