@@ -274,6 +274,14 @@ namespace CyberGame.Controllers
                 // Tính toán tiền máy & tiền cọc tối thiểu 30 phút
                 decimal zonePrice = 10000;
                 var targetZone = await _context.Zones.FindAsync(dto.ZoneId);
+                if (targetZone == null && selectedCompIds.Any())
+                {
+                    var comp = await _context.Computers.Include(c => c.Zone).FirstOrDefaultAsync(c => c.ComputerId == selectedCompIds.First());
+                    if (comp?.Zone != null)
+                    {
+                        targetZone = comp.Zone;
+                    }
+                }
                 if (targetZone != null) zonePrice = targetZone.PricePerHour;
 
                 int compCount = selectedCompIds.Count > 0 ? selectedCompIds.Count : 1;
@@ -451,6 +459,11 @@ namespace CyberGame.Controllers
                     startTime = startTime.ToString("dd/MM/yyyy HH:mm"),
                     endTime = endTime.ToString("dd/MM/yyyy HH:mm"),
                     minDeposit = minDepositRequired,
+                    depositAmount = minDepositRequired,
+                    deposit = minDepositRequired,
+                    depositFee = minDepositRequired,
+                    pricePerHour = zonePrice,
+                    zonePrice = zonePrice,
                     totalAmount = totalRequired,
                     deductedAmount = deductedAmount,
                     isFullPayment = isFullPayment,
@@ -468,7 +481,10 @@ namespace CyberGame.Controllers
 
         public async Task<IActionResult> Menu()
         {
-            var foods = await _context.Foods.ToListAsync();
+            var foods = await _context.Foods
+                .Where(f => f.Status == "available")
+                .OrderBy(f => f.FoodId)
+                .ToListAsync();
             return View(foods);
         }
 
@@ -524,10 +540,12 @@ namespace CyberGame.Controllers
                     user.Balance -= total;
                 }
 
+                var seatLabel = !string.IsNullOrWhiteSpace(dto.SeatLabel) ? dto.SeatLabel.Trim() : (!string.IsNullOrWhiteSpace(dto.SeatNumber) ? dto.SeatNumber.Trim() : null);
+
                 var order = new FoodOrder
                 {
                     UserId = userId,
-                    SeatLabel = dto.SeatNumber,
+                    SeatLabel = seatLabel,
                     PaymentMethod = payMethod,
                     Status = "pending",
                     TotalAmount = total,
@@ -553,12 +571,26 @@ namespace CyberGame.Controllers
 
                 foreach (var item in dto.Items)
                 {
+                    int foodId = item.FoodId;
+                    if (foodId <= 0 && !string.IsNullOrWhiteSpace(item.Name))
+                    {
+                        var foundFood = await _context.Foods.FirstOrDefaultAsync(f => f.Name.ToLower() == item.Name.ToLower());
+                        if (foundFood != null) foodId = foundFood.FoodId;
+                    }
+                    if (foodId <= 0)
+                    {
+                        var firstFood = await _context.Foods.FirstOrDefaultAsync();
+                        if (firstFood != null) foodId = firstFood.FoodId;
+                    }
+
+                    int qty = item.Quantity > 0 ? item.Quantity : 1;
                     var orderItem = new FoodOrderItem
                     {
                         OrderId = order.OrderId,
-                        FoodId = item.FoodId,
-                        Quantity = item.Quantity,
-                        UnitPrice = item.Price
+                        FoodId = foodId,
+                        Quantity = qty,
+                        UnitPrice = item.Price,
+                        Subtotal = item.Price * qty
                     };
                     _context.FoodOrderItems.Add(orderItem);
                 }
@@ -569,6 +601,12 @@ namespace CyberGame.Controllers
                     success = true,
                     orderId = order.OrderId,
                     total = total,
+                    totalAmount = total,
+                    seatLabel = order.SeatLabel,
+                    seatNumber = order.SeatLabel,
+                    status = order.Status,
+                    paymentMethod = order.PaymentMethod,
+                    newBalance = user.Balance,
                     message = "Đặt món thành công! Mã đơn #" + order.OrderId
                 });
             }

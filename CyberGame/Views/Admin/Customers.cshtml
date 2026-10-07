@@ -67,6 +67,7 @@
             <thead>
               <tr>
                 <th>Mã KH</th>
+                <th>Tên Tài Khoản</th>
                 <th>Họ và Tên</th>
                 <th>Gmail / Email</th>
                 <th>Số Dư Tài Khoản</th>
@@ -137,13 +138,23 @@
       <form id="formCreateCustomer">
         <div class="admin-modal-body">
           <div class="admin-form-group">
-            <label for="newCustName">Họ và Tên <span class="req">*</span></label>
-            <input type="text" id="newCustName" class="admin-input" placeholder="Ví dụ: Nguyễn Văn Hoàng" required>
+            <label for="newCustUsername">Tên Tài Khoản (Username) <span class="req">*</span></label>
+            <input type="text" id="newCustUsername" class="admin-input" placeholder="Ví dụ: gamer01, new_member_01" required>
           </div>
 
           <div class="admin-form-group">
-            <label for="newCustEmail">Địa Chỉ Gmail / Email <span class="req">*</span></label>
-            <input type="email" id="newCustEmail" class="admin-input" placeholder="Ví dụ: example@gmail.com" required>
+            <label for="newCustName">Họ và Tên (Tùy chọn)</label>
+            <input type="text" id="newCustName" class="admin-input" placeholder="Ví dụ: Nguyễn Văn Hoàng">
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newCustEmail">Địa Chỉ Gmail / Email (Tùy chọn)</label>
+            <input type="email" id="newCustEmail" class="admin-input" placeholder="Để trống tự sinh: username@cybergame.vn">
+          </div>
+
+          <div class="admin-form-group">
+            <label for="newCustPassword">Mật Khẩu Ban Đầu</label>
+            <input type="text" id="newCustPassword" class="admin-input" value="123456" placeholder="Mặc định: 123456">
           </div>
 
           <div class="admin-form-group">

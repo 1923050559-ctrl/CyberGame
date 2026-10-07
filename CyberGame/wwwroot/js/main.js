@@ -28,7 +28,9 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(document.querySelector("#cyberDetail")) renderCyberDetail();
   if(document.querySelector("#gamePage")) renderGamesPage();
   if(document.querySelector("#newsPage")) renderNewsPage();
-  if(document.querySelector("#menuPage")) renderMenuPage();
+  // Trang /Home/Menu được Razor View (Menu.cshtml) render trực tiếp toàn bộ 20 món từ Database (bảng FOODS).
+  // Không gọi renderMenuPage() để tránh ghi đè dữ liệu mẫu tĩnh lên thực đơn thực tế.
+  // if(document.querySelector("#menuPage")) renderMenuPage();
   if(document.querySelector("#articlePage")) renderArticle();
 });
 
@@ -853,12 +855,19 @@ function renderBookingPage() {
             
             const detailEl = modal.querySelector("#successBookingDetails") || modal.querySelector("#successBookingInfo");
             if (detailEl) {
+              const payInfo = (data.deductedAmount === 0)
+                ? `<div style="margin-top:10px;padding:10px 14px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:13px;color:#fcd34d;line-height:1.5">
+                    ⏳ <strong>Trạng thái:</strong> CHỜ THANH TOÁN CỌC (${(data.minDeposit || data.depositAmount || 0).toLocaleString('vi-VN')} đ). Vui lòng chuyển khoản cọc trong vòng 30 phút để giữ máy!<br>
+                    <div style="margin-top:8px"><a href="/Account/Profile" class="btn blue" style="padding:6px 14px;font-size:12px;border-radius:4px;display:inline-block;text-decoration:none">👉 NẠP TIỀN VÍ QUA VIETQR NGAY</a></div>
+                   </div>`
+                : `<div style="margin-top:10px;padding:8px 12px;background:#1a202c;border-radius:6px;font-size:13px;color:#a0aec0">
+                    ${data.message || 'Hệ thống đã giữ máy cho bạn.'}
+                   </div>`;
+
               detailEl.innerHTML = `
                 Máy chỉ định: <strong style="color:var(--blue)">${data.computerName || chosenSeats.join(', ')}</strong><br>
                 Thời gian: <strong>${data.startTime} - ${data.endTime}</strong><br>
-                <div style="margin-top:10px;padding:8px 12px;background:#1a202c;border-radius:6px;font-size:13px;color:#a0aec0">
-                  ${data.message || 'Hệ thống đã giữ máy cho bạn.'}
-                </div>
+                ${payInfo}
               `;
             }
             modal.classList.add("open");
@@ -873,10 +882,10 @@ function renderBookingPage() {
             location.reload();
           }
         } else {
-          // Báo lỗi và gợi ý quét QR nếu thiếu tiền cọc
+          // Báo lỗi và gợi ý nạp tiền nếu thiếu tiền cọc
           if (data.insufficientBalance || data.requireDeposit) {
-            if (confirm((data.message || "Số dư ví không đủ cọc 30 phút.") + "\n\nBạn có muốn mở mã VietQR để thanh toán tiền cọc giữ máy ngay không?")) {
-              openQrModal(minDepositAmount, "CỌC GIỮ MÁY 30 PHÚT");
+            if (confirm((data.message || "Số dư ví không đủ cọc 30 phút.") + "\n\nBạn có muốn chuyển sang trang nạp tiền ví ngay không?")) {
+              window.location.href = "/Account/Profile";
             }
           } else {
             alert(data.message || "Đặt chỗ thất bại. Vui lòng thử lại.");
@@ -936,15 +945,18 @@ function renderBookingPage() {
     // Nếu số dư KHÔNG đủ:
     else {
       if (paymentVal === 'BANK_QR') {
-        openQrModal(requiredAmount, isDepositOnly ? "CỌC GIỮ MÁY 30 PHÚT" : "THANH TOÁN TRỌN GÓI 100%");
+        openQrModal(minDepositAmount, isDepositOnly ? "CỌC GIỮ MÁY 30 PHÚT" : "THANH TOÁN TRỌN GÓI 100%");
       } else if (paymentVal === 'CASH') {
-        // Tiền mặt: Không được đặt nếu không có cọc -> yêu cầu cọc VietQR
-        alert(`Quy định giữ chỗ yêu cầu cọc trước ít nhất 30 phút (${minDepositAmount.toLocaleString('vi-VN')} đ).\nSố dư ví của bạn hiện có ${user.balance.toLocaleString('vi-VN')} đ (không đủ).\nVui lòng quét mã VietQR để cọc giữ chỗ.`);
-        openQrModal(minDepositAmount, "CỌC GIỮ MÁY 30 PHÚT");
+        alert(`Quy định giữ chỗ yêu cầu cọc trước ít nhất 30 phút (${minDepositAmount.toLocaleString('vi-VN')} đ).\nSố dư ví của bạn hiện có ${user.balance.toLocaleString('vi-VN')} đ (không đủ).\nVui lòng nạp tiền vào ví hoặc chuyển sang trang thanh toán.`);
+        if (confirm("Bạn có muốn chuyển sang trang Nạp tiền ví ngay không?")) {
+          window.location.href = "/Account/Profile";
+        }
       } else {
-        // Ví: Số dư không đủ -> mở VietQR cọc
-        alert(`Số dư ví của bạn (${user.balance.toLocaleString('vi-VN')} đ) không đủ để cọc tối thiểu 30 phút (${minDepositAmount.toLocaleString('vi-VN')} đ).\nVui lòng quét mã VietQR để cọc giữ máy hoặc nạp thêm ví.`);
-        openQrModal(minDepositAmount, "CỌC GIỮ MÁY 30 PHÚT");
+        // Ví: Số dư không đủ -> chuyển sang nạp tiền ví
+        alert(`Số dư ví của bạn (${user.balance.toLocaleString('vi-VN')} đ) không đủ để cọc tối thiểu 30 phút (${minDepositAmount.toLocaleString('vi-VN')} đ).\nVui lòng nạp thêm tiền vào ví.`);
+        if (confirm("Bạn có muốn chuyển sang trang Nạp tiền ví ngay không?")) {
+          window.location.href = "/Account/Profile";
+        }
       }
     }
   });
@@ -1170,6 +1182,8 @@ function setupChatbot() {
 
 function renderMenuPage() {
   const list = document.querySelector("#fullMenuList");
+  // Nếu đã có dữ liệu món ăn render từ server (Database) thì giữ nguyên, không ghi đè dữ liệu tĩnh
+  if (!list || list.children.length > 0) return;
   const filterBtns = document.querySelectorAll("#menuFilter button");
   const cartItems = document.querySelector("#cartItems");
   const cartTotal = document.querySelector("#cartTotal");

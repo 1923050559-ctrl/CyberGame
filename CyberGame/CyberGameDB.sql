@@ -60,6 +60,10 @@ CREATE TABLE RECHARGES (
     method_id INT NOT NULL,
     status VARCHAR(20) NOT NULL CONSTRAINT DF_Recharges_Status DEFAULT 'pending',
     transaction_code VARCHAR(100) NULL,
+    sepay_transaction_id BIGINT NULL,
+    reference_code VARCHAR(100) NULL,
+    content NVARCHAR(500) NULL,
+    paid_at DATETIME NULL,
     created_at DATETIME NOT NULL CONSTRAINT DF_Recharges_CreatedAt DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL,
     CONSTRAINT FK_Recharges_Users FOREIGN KEY (user_id) REFERENCES USERS(user_id),
@@ -175,7 +179,7 @@ CREATE TABLE FOOD_ORDERS (
     CONSTRAINT FK_FoodOrders_Sessions FOREIGN KEY (session_id) REFERENCES SESSIONS(session_id),
     CONSTRAINT CK_FoodOrders_Total CHECK (total_amount >= 0),
     CONSTRAINT CK_FoodOrders_Payment CHECK (payment_method IN ('CASH', 'BANK_QR', 'WALLET')),
-    CONSTRAINT CK_FoodOrders_Status CHECK (status IN ('pending', 'preparing', 'delivered', 'completed', 'cancelled'))
+    CONSTRAINT CK_FoodOrders_Status CHECK (status IN ('pending', 'preparing', 'cooking', 'served', 'delivered', 'completed', 'cancelled'))
 );
 
 -- BẢNG 12: FOOD_ORDER_ITEMS (Chi tiết từng món trong đơn F&B)
@@ -368,32 +372,32 @@ GO
 -- -----------------------------------------------------------------------------
 INSERT INTO FOODS (name, category, price, image_url, status) VALUES
 -- Đồ ăn (food)
-(N'Mì xào bò', 'food', 35000.00, 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Cơm rang dưa bò', 'food', 45000.00, 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Bánh mì pate trứng', 'food', 25000.00, 'https://images.unsplash.com/photo-1606850239638-b78f8b8e0508?auto=format&fit=crop&w=400&q=80', 'available'),
+(N'Mì xào bò', 'food', 35000.00, 'https://drive.google.com/file/d/124xHayI-tVQv42DDfNLz6tPXyXMI8NMm/view?usp=drive_link', 'available'),
+(N'Cơm rang dưa bò', 'food', 45000.00, 'https://drive.google.com/file/d/11-MA3w6rHnwlVOTJV1TACPbXjdHhzc_o/view?usp=drive_link', 'available'),
+(N'Bánh mì pate trứng', 'food', 25000.00, 'https://drive.google.com/file/d/1CzGXeBEziNqdvzddN6emFPsreJydkw8p/view?usp=drive_link', 'available'),
 (N'Mì tôm 2 trứng xúc xích', 'food', 30000.00, 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=400&q=80', 'available'),
 (N'Cơm gà xối mỡ', 'food', 45000.00, 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=400&q=80', 'available'),
 
 -- Nước uống (drink)
-(N'Sting Dâu', 'drink', 15000.00, 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Bò húc (Redbull)', 'drink', 20000.00, 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80', 'available'),
+(N'Sting Dâu', 'drink', 15000.00, 'https://drive.google.com/file/d/1yuiZIT10BgtccVUrmWNr829Y5DIxUwi-/view?usp=drive_link', 'available'),
+(N'Bò húc (Redbull)', 'drink', 20000.00, 'https://drive.google.com/file/d/1_pUeJuo7fxk9_d1t9i2S4GMw5Ol1kqmk/view?usp=drive_link', 'available'),
 (N'Coca Cola', 'drink', 15000.00, 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=400&q=80', 'available'),
 (N'Trà đào cam sả', 'drink', 30000.00, 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=400&q=80', 'available'),
 (N'Cà phê sữa đá', 'drink', 22000.00, 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=400&q=80', 'available'),
 (N'Nước khoáng Aquafina', 'drink', 10000.00, 'https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=400&q=80', 'available'),
 
 -- Đồ ăn vặt (snack)
-(N'Khoai tây chiên', 'snack', 25000.00, 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Xúc xích Đức nướng', 'snack', 15000.00, 'https://images.unsplash.com/photo-1599598425947-33002620ea1f?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Khô gà lá chanh', 'snack', 30000.00, 'https://images.unsplash.com/photo-1621996316521-8789db4c8ff9?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Đậu phộng rang tỏi ớt', 'snack', 15000.00, 'https://images.unsplash.com/photo-1571556948574-d023f0343a41?auto=format&fit=crop&w=400&q=80', 'available'),
+(N'Khoai tây chiên', 'snack', 25000.00, 'https://drive.google.com/file/d/1HcG6-agXYKHHSaNjrId9y4c83l5RU8ON/view?usp=drive_link', 'available'),
+(N'Xúc xích Đức nướng', 'snack', 15000.00, 'https://drive.google.com/file/d/1WuBYXAfJ9-IfTNRWAmmkr7wXhgp1SLlo/view?usp=drive_link', 'available'),
+(N'Khô gà lá chanh', 'snack', 30000.00, 'https://drive.google.com/file/d/1FqxOIJtkaJ0HWkdjdb2fI--QFlH91Erh/view?usp=drive_link', 'available'),
+(N'Đậu phộng rang tỏi ớt', 'snack', 15000.00, 'https://drive.google.com/file/d/10jN2rH0E9yhn78mgMoZTNiUNJeZ9bHuI/view?usp=drive_link', 'available'),
 (N'Bỏng ngô phô mai', 'snack', 20000.00, 'https://images.unsplash.com/photo-1578849278619-e73505e9610f?auto=format&fit=crop&w=400&q=80', 'available'),
 
 -- Tiện ích (utility)
 (N'Bọc tai nghe (1 lần)', 'utility', 5000.00, 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80', 'available'),
 (N'Áo mưa dùng 1 lần', 'utility', 10000.00, 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Gối chữ U kê cổ', 'utility', 20000.00, 'https://images.unsplash.com/photo-1584100936595-c0654b35a113?auto=format&fit=crop&w=400&q=80', 'available'),
-(N'Chăn đắp mỏng', 'utility', 25000.00, 'https://images.unsplash.com/photo-1580252541459-7b3d328325db?auto=format&fit=crop&w=400&q=80', 'available');
+(N'Gối chữ U kê cổ', 'utility', 20000.00, 'https://drive.google.com/file/d/1sMPCajhDsoaTYPWRopmGhY79lrd_SmUY/view?usp=drive_link', 'available'),
+(N'Chăn đắp mỏng', 'utility', 25000.00, 'https://drive.google.com/file/d/19kieBibwZSBjcSQV61MW1473ALT7Y9am/view?usp=drive_link', 'available');
 GO
 
 -- -----------------------------------------------------------------------------
