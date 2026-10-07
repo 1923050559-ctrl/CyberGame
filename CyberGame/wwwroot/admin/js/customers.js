@@ -1,68 +1,31 @@
 /**
  * CYBERGAME ADMIN - CUSTOMER MANAGEMENT & FNB ORDER PROCESSING CONTROLLER
  * Features:
- * 1. Customer CRUD (Create Account, Edit, Delete, Top Up Balance)
+ * 1. Customer Live CRUD (Create Account, Edit, Lock/Delete, Top Up Balance via DB APIs)
  * 2. Custom Right-Click Context Menu
  * 3. FnB Live Order Queue & Workflow Processing
- * 4. LocalStorage State Persistence
+ * 4. Real-time synchronization with server DB
  */
 
 // ==========================================================================
-// 1. DATA STORAGE & INITIAL SEEDING (CLEAN ZERO FAKE DATA)
+// 1. DATA STATE MANAGEMENT
 // ==========================================================================
-const STORAGE_KEY_CUSTOMERS = 'cybergame_customers_v3';
-const STORAGE_KEY_ORDERS = 'cybergame_fnb_orders_v3';
-
-// Clear legacy fake customer and order data
-try {
-  localStorage.removeItem('cybergame_customers_v1');
-  localStorage.removeItem('cybergame_customers_v2');
-  localStorage.removeItem('cybergame_fnb_orders_v1');
-} catch (e) {}
-
-// Initial customer accounts (Clean empty array, ready for user creation or DB)
-const DEFAULT_CUSTOMERS = [];
-
-// Initial orders for kitchen queue (Clean empty array, ready for real live orders)
-const DEFAULT_ORDERS = [];
+let appCustomers = [];
+let appOrders = [];
+let currentSelectedCustomer = null;
+let currentOrderFilter = 'all';
 
 function getCustomers() {
-  const saved = localStorage.getItem(STORAGE_KEY_CUSTOMERS);
-  if (!saved) {
-    saveCustomers(DEFAULT_CUSTOMERS);
-    return DEFAULT_CUSTOMERS;
-  }
-  try {
-    return JSON.parse(saved);
-  } catch (e) {
-    return DEFAULT_CUSTOMERS;
-  }
-}
-
-function saveCustomers(customers) {
-  localStorage.setItem(STORAGE_KEY_CUSTOMERS, JSON.stringify(customers));
+  return appCustomers;
 }
 
 function getOrders() {
-  const saved = localStorage.getItem(STORAGE_KEY_ORDERS);
-  if (!saved) {
-    saveOrders(DEFAULT_ORDERS);
-    return DEFAULT_ORDERS;
-  }
-  try {
-    return JSON.parse(saved);
-  } catch (e) {
-    return DEFAULT_ORDERS;
-  }
-}
-
-function saveOrders(orders) {
-  localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orders));
+  return appOrders;
 }
 
 // Helpers
 function formatCurrency(num) {
-  return new Intl.NumberFormat('vi-VN').format(num) + ' VNĐ';
+  return new Intl.NumberFormat('vi-VN').format(num || 0) + ' VNĐ';
 }
 
 function showToast(message, type = 'success') {
@@ -82,14 +45,58 @@ function showToast(message, type = 'success') {
     toast.style.transform = 'translateY(-10px)';
     toast.style.transition = 'all 0.3s ease';
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, 3500);
 }
 
 // ==========================================================================
-// 2. CUSTOMER LIST RENDERING & ACTIONS
+// 2. FETCH DATA FROM SERVER
 // ==========================================================================
-let currentSelectedCustomer = null;
+async function fetchAndRenderData() {
+  try {
+    const res = await fetch('/Admin/GetCustomersData');
+    if (!res.ok) {
+      console.warn('GetCustomersData returned status ' + res.status);
+      return;
+    }
+    const data = await res.json();
+    if (data.success) {
+      if (Array.isArray(data.customers)) {
+        appCustomers = data.customers.map(c => ({
+          id: c.id,
+          username: c.username,
+          name: c.fullName || c.username,
+          email: c.email || '',
+          phone: c.phone || '',
+          balance: c.balance || 0,
+          role: c.role || 'member',
+          status: (c.status === 'banned' || c.status === 'locked') ? 'locked' : 'active',
+          createdAt: c.createdAt || 'Mới'
+        }));
+      }
 
+      if (Array.isArray(data.orders)) {
+        appOrders = data.orders.map(o => ({
+          id: o.id,
+          customer: o.customerName || 'Khách',
+          seat: o.seatNumber || 'Máy',
+          status: o.status || 'pending',
+          total: o.total || 0,
+          time: o.createdAt || '',
+          items: Array.isArray(o.items) ? o.items : []
+        }));
+      }
+
+      renderCustomersTable(document.getElementById('mainSearchInput')?.value || '');
+      renderOrders(currentOrderFilter);
+    }
+  } catch (err) {
+    console.error('Error loading admin customers & orders:', err);
+  }
+}
+
+// ==========================================================================
+// 3. CUSTOMER LIST RENDERING & ACTIONS
+// ==========================================================================
 function renderCustomersTable(searchQuery = '') {
   const tbody = document.getElementById('customersTableBody');
   if (!tbody) return;
@@ -99,9 +106,10 @@ function renderCustomersTable(searchQuery = '') {
 
   const filtered = customers.filter(c => 
     !query ||
-    c.name.toLowerCase().includes(query) ||
+    (c.username && c.username.toLowerCase().includes(query)) ||
+    (c.name && c.name.toLowerCase().includes(query)) ||
     (c.email && c.email.toLowerCase().includes(query)) ||
-    c.id.toLowerCase().includes(query)
+    String(c.id).includes(query)
   );
 
   // Update counters
@@ -117,7 +125,7 @@ function renderCustomersTable(searchQuery = '') {
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+        <td colspan="8" style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
           <div style="font-size: 36px; margin-bottom: 8px;">👤</div>
           <div style="font-weight: 700; font-size: 15px; color: #fff;">Không tìm thấy khách hàng nào</div>
           <div style="font-size: 12px; margin-top: 4px;">Nhấn nút "+ Tạo Tài Khoản Cho Khách" ở góc phải để thêm mới</div>
@@ -129,13 +137,16 @@ function renderCustomersTable(searchQuery = '') {
 
   tbody.innerHTML = filtered.map(c => {
     const isPositive = c.balance > 0;
-    const isLocked = c.status === 'locked';
+    const isLocked = c.status === 'locked' || c.status === 'banned';
 
     return `
       <tr class="customer-row" data-id="${c.id}">
-        <td><strong style="color: var(--admin-blue-light); font-family: monospace;">${c.id}</strong></td>
+        <td><strong style="color: var(--admin-blue-light); font-family: monospace;">#${c.id}</strong></td>
         <td>
-          <div style="font-weight: 700; color: #fff; font-size: 14px;">${c.name}</div>
+          <div style="font-weight: 700; color: #38bdf8; font-family: monospace; font-size: 14px;">${c.username}</div>
+        </td>
+        <td>
+          <div style="font-weight: 600; color: #fff; font-size: 13px;">${c.name}</div>
         </td>
         <td>
           <span style="font-weight: 500; color: var(--text-main); font-family: monospace;">${c.email || '—'}</span>
@@ -158,7 +169,7 @@ function renderCustomersTable(searchQuery = '') {
           <div class="action-btn-group" style="justify-content: flex-end;">
             <button class="btn-icon-action btn-topup" data-id="${c.id}" title="Nạp tiền nhanh">💵</button>
             <button class="btn-icon-action btn-edit" data-id="${c.id}" title="Sửa thông tin">✏️</button>
-            <button class="btn-icon-action danger btn-delete" data-id="${c.id}" title="Xóa tài khoản">🗑️</button>
+            <button class="btn-icon-action danger btn-delete" data-id="${c.id}" title="Khóa tài khoản">🔒</button>
           </div>
         </td>
       </tr>
@@ -167,8 +178,9 @@ function renderCustomersTable(searchQuery = '') {
 
   // Attach Event Listeners to rows
   tbody.querySelectorAll('.customer-row').forEach(row => {
-    const id = row.dataset.id;
+    const id = parseInt(row.dataset.id, 10);
     const customer = customers.find(c => c.id === id);
+    if (!customer) return;
 
     // RIGHT-CLICK CONTEXT MENU
     row.addEventListener('contextmenu', (e) => {
@@ -195,7 +207,7 @@ function renderCustomersTable(searchQuery = '') {
 }
 
 // ==========================================================================
-// 3. RIGHT-CLICK CONTEXT MENU
+// 4. RIGHT-CLICK CONTEXT MENU
 // ==========================================================================
 const contextMenu = document.getElementById('customerContextMenu');
 
@@ -212,7 +224,7 @@ function openContextMenu(x, y, customer) {
   // Update menu title
   const titleEl = document.getElementById('ctxCustomerTitle');
   if (titleEl) {
-    titleEl.textContent = `KH: ${customer.name} (${customer.id})`;
+    titleEl.textContent = `KH: ${customer.username} (#${customer.id})`;
   }
 
   // Position context menu
@@ -241,7 +253,7 @@ function closeContextMenu() {
 }
 
 // ==========================================================================
-// 4. MODALS MANAGEMENT
+// 5. MODALS MANAGEMENT
 // ==========================================================================
 function openModal(modalId) {
   closeContextMenu();
@@ -262,7 +274,8 @@ function closeAllModals() {
 function openCreateCustomerModal() {
   const form = document.getElementById('formCreateCustomer');
   if (form) form.reset();
-  document.getElementById('newCustInitialBalance').value = 50000;
+  const balanceInput = document.getElementById('newCustInitialBalance');
+  if (balanceInput) balanceInput.value = 50000;
   openModal('createCustomerModal');
 }
 
@@ -272,7 +285,7 @@ function openTopUpModal(customer) {
   currentSelectedCustomer = customer;
 
   document.getElementById('topUpCustomerId').value = customer.id;
-  document.getElementById('topUpCustomerName').textContent = `${customer.name} (${customer.email || customer.id})`;
+  document.getElementById('topUpCustomerName').textContent = `${customer.username} (${customer.name || customer.email || '#' + customer.id})`;
   document.getElementById('topUpCurrentBalance').textContent = formatCurrency(customer.balance);
   document.getElementById('topUpAmount').value = 50000;
 
@@ -285,9 +298,9 @@ function openEditCustomerModal(customer) {
   currentSelectedCustomer = customer;
 
   document.getElementById('editCustomerId').value = customer.id;
-  document.getElementById('editCustName').value = customer.name;
+  document.getElementById('editCustName').value = customer.name || customer.username;
   document.getElementById('editCustEmail').value = customer.email || '';
-  document.getElementById('editCustStatus').value = customer.status || 'active';
+  document.getElementById('editCustStatus').value = (customer.status === 'locked' || customer.status === 'banned') ? 'locked' : 'active';
 
   openModal('editCustomerModal');
 }
@@ -298,16 +311,14 @@ function openDeleteCustomerModal(customer) {
   currentSelectedCustomer = customer;
 
   const label = document.getElementById('deleteCustomerName');
-  if (label) label.textContent = `${customer.name} (${customer.id})`;
+  if (label) label.textContent = `${customer.username} (#${customer.id})`;
 
   openModal('deleteCustomerModal');
 }
 
 // ==========================================================================
-// 5. FNB LIVE ORDERS QUEUE & WORKFLOW
+// 6. FNB LIVE ORDERS QUEUE & WORKFLOW
 // ==========================================================================
-let currentOrderFilter = 'all';
-
 function renderOrders(filter = currentOrderFilter) {
   currentOrderFilter = filter;
   const container = document.getElementById('ordersContainer');
@@ -348,7 +359,7 @@ function renderOrders(filter = currentOrderFilter) {
             <button class="btn-order-action" style="background: var(--admin-blue); color: #fff;" data-action="prepare" data-id="${order.id}">👨‍🍳 Nhận đơn & Làm</button>
             <button class="btn-order-action" style="background: #232830; color: #ef4444;" data-action="cancel" data-id="${order.id}">Hủy</button>
           `;
-        } else if (order.status === 'preparing') {
+        } else if (order.status === 'preparing' || order.status === 'cooking') {
           statusBadge = '<span class="badge info">🔥 Đang chuẩn bị</span>';
           actionButtons = `
             <button class="btn-order-action" style="background: var(--admin-purple); color: #fff;" data-action="serve" data-id="${order.id}">🚚 Đã phục vụ máy</button>
@@ -372,7 +383,7 @@ function renderOrders(filter = currentOrderFilter) {
             <div class="order-card-header">
               <div>
                 <strong style="color: #fff; font-size: 15px;">${order.customer}</strong>
-                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Mã: ${order.id} • ${order.time}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Mã đơn: #${order.id} • ${order.time}</div>
               </div>
               <span class="order-seat-badge">🖥️ ${order.seat}</span>
             </div>
@@ -384,8 +395,8 @@ function renderOrders(filter = currentOrderFilter) {
             <div class="order-items-box">
               ${order.items.map(it => `
                 <div class="order-item-row">
-                  <span>${it.name} <strong style="color: var(--admin-cyan);">x${it.qty}</strong></span>
-                  <span style="color: var(--text-muted);">${formatCurrency(it.price * it.qty)}</span>
+                  <span>${it.name || it} <strong style="color: var(--admin-cyan);">${it.qty ? 'x' + it.qty : ''}</strong></span>
+                  <span style="color: var(--text-muted);">${it.price ? formatCurrency(it.price * (it.qty || 1)) : ''}</span>
                 </div>
               `).join('')}
             </div>
@@ -414,43 +425,49 @@ function renderOrders(filter = currentOrderFilter) {
   });
 }
 
-function updateOrderStatus(orderId, action) {
-  const orders = getOrders();
-  const order = orders.find(o => o.id === orderId);
-  if (!order) return;
+async function updateOrderStatus(orderId, action) {
+  let newStatus = 'pending';
+  let toastMsg = '';
 
   if (action === 'prepare') {
-    order.status = 'preparing';
-    showToast(`Đã nhận đơn #${orderId}, bếp đang chuẩn bị!`);
+    newStatus = 'preparing';
+    toastMsg = `Đã nhận đơn #${orderId}, bếp đang chuẩn bị!`;
   } else if (action === 'serve') {
-    order.status = 'served';
-    showToast(`Đã phục vụ đơn #${orderId} tại ${order.seat}!`);
+    newStatus = 'served';
+    toastMsg = `Đã phục vụ đơn #${orderId}!`;
   } else if (action === 'complete') {
-    order.status = 'completed';
-    showToast(`Đơn #${orderId} đã thanh toán hoàn tất: ${formatCurrency(order.total)}!`);
+    newStatus = 'completed';
+    toastMsg = `Đơn #${orderId} đã thanh toán hoàn tất!`;
   } else if (action === 'cancel') {
-    if (confirm(`Bạn chắc chắn muốn hủy đơn hàng #${orderId}?`)) {
-      order.status = 'cancelled';
-      showToast(`Đã hủy đơn hàng #${orderId}`, 'danger');
-    }
+    if (!confirm(`Bạn chắc chắn muốn hủy đơn hàng #${orderId}?`)) return;
+    newStatus = 'cancelled';
+    toastMsg = `Đã hủy đơn hàng #${orderId}`;
   }
 
-  saveOrders(orders);
-  renderOrders();
-  fetch('/Admin/UpdateOrderStatus', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderId: parseInt(orderId), status: order.status })
-  }).catch(e => console.log(e));
+  try {
+    const res = await fetch('/Admin/UpdateOrderStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId: parseInt(orderId, 10), status: newStatus })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(toastMsg, action === 'cancel' ? 'danger' : 'success');
+      await fetchAndRenderData();
+    } else {
+      showToast(data.message || 'Lỗi cập nhật đơn hàng', 'danger');
+    }
+  } catch (err) {
+    console.error('Update order status error', err);
+  }
 }
 
 // ==========================================================================
-// 6. INITIALIZATION & EVENT LISTENERS
+// 7. INITIALIZATION & EVENT LISTENERS
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Initial Render
-  renderCustomersTable();
-  renderOrders();
+  // 1. Initial Load from Backend API
+  fetchAndRenderData();
 
   // 2. Tab Navigation
   const tabBtns = document.querySelectorAll('.tab-btn[data-tab]');
@@ -522,44 +539,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // 8. Create Customer Form Submit
   const formCreate = document.getElementById('formCreateCustomer');
   if (formCreate) {
-    formCreate.addEventListener('submit', (e) => {
+    formCreate.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = document.getElementById('newCustName').value.trim();
-      const email = document.getElementById('newCustEmail').value.trim();
+      const usernameInput = document.getElementById('newCustUsername');
+      const username = (usernameInput ? usernameInput.value : document.getElementById('newCustName').value).trim();
+      const name = document.getElementById('newCustName') ? document.getElementById('newCustName').value.trim() : username;
+      const email = document.getElementById('newCustEmail') ? document.getElementById('newCustEmail').value.trim() : '';
+      const password = document.getElementById('newCustPassword') ? document.getElementById('newCustPassword').value.trim() : '123456';
       const initialBalance = parseInt(document.getElementById('newCustInitialBalance').value, 10) || 0;
 
-      const customers = getCustomers();
-
-      // Check duplicate email
-      if (customers.some(c => c.email && c.email.toLowerCase() === email.toLowerCase())) {
-        showToast('Địa chỉ Gmail này đã được đăng ký tài khoản!', 'danger');
+      if (!username) {
+        showToast('Vui lòng nhập tên tài khoản!', 'danger');
         return;
       }
 
-      const nextNum = customers.length + 1;
-      const newId = `KH-${String(nextNum).padStart(3, '0')}`;
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      try {
+        const res = await fetch('/Admin/CreateCustomer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username,
+            fullName: name,
+            email: email,
+            password: password,
+            initialBalance: initialBalance
+          })
+        });
 
-      const newCustomer = {
-        id: newId,
-        name: name,
-        email: email,
-        balance: initialBalance,
-        status: 'active',
-        createdAt: dateStr
-      };
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.message || 'Tên tài khoản đã tồn tại.', 'danger');
+          return;
+        }
 
-      customers.unshift(newCustomer);
-      saveCustomers(customers);
-      fetch('/Admin/CreateCustomer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: name, email: email, initialBalance: initialBalance })
-      }).catch(e => console.log(e));
-      renderCustomersTable();
-      closeAllModals();
-      showToast(`Đã tạo tài khoản thành công cho khách hàng ${name} (${newId})!`);
+        showToast(data.message || `Đã tạo tài khoản thành công cho ${username}!`);
+        closeAllModals();
+        await fetchAndRenderData();
+      } catch (err) {
+        showToast('Lỗi khi gửi yêu cầu tới máy chủ: ' + err.message, 'danger');
+      }
     });
   }
 
@@ -582,25 +600,35 @@ document.addEventListener('DOMContentLoaded', () => {
   // 9. Top Up Form Submit
   const formTopUp = document.getElementById('formTopUp');
   if (formTopUp) {
-    formTopUp.addEventListener('submit', (e) => {
+    formTopUp.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const id = document.getElementById('topUpCustomerId').value;
+      const id = parseInt(document.getElementById('topUpCustomerId').value, 10);
       const amount = parseInt(document.getElementById('topUpAmount').value, 10) || 0;
 
-      if (amount <= 0) {
+      if (!id || amount <= 0) {
         showToast('Số tiền nạp phải lớn hơn 0 VNĐ!', 'danger');
         return;
       }
 
-      const customers = getCustomers();
-      const customer = customers.find(c => c.id === id);
-      if (!customer) return;
+      try {
+        const res = await fetch('/Admin/TopUpBalance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: id, amount: amount })
+        });
 
-      customer.balance = (customer.balance || 0) + amount;
-      saveCustomers(customers);
-      renderCustomersTable();
-      closeAllModals();
-      showToast(`Đã nạp thành công ${formatCurrency(amount)} cho khách hàng ${customer.name}!`);
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.message || 'Nạp tiền thất bại.', 'danger');
+          return;
+        }
+
+        showToast(data.message || `Đã nạp thành công ${formatCurrency(amount)}!`);
+        closeAllModals();
+        await fetchAndRenderData();
+      } catch (err) {
+        showToast('Lỗi nạp tiền: ' + err.message, 'danger');
+      }
     });
   }
 
@@ -614,82 +642,62 @@ document.addEventListener('DOMContentLoaded', () => {
   // 10. Edit Customer Form Submit
   const formEdit = document.getElementById('formEditCustomer');
   if (formEdit) {
-    formEdit.addEventListener('submit', (e) => {
+    formEdit.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const id = document.getElementById('editCustomerId').value;
+      const id = parseInt(document.getElementById('editCustomerId').value, 10);
       const name = document.getElementById('editCustName').value.trim();
       const email = document.getElementById('editCustEmail').value.trim();
       const status = document.getElementById('editCustStatus').value;
 
-      const customers = getCustomers();
-      const customer = customers.find(c => c.id === id);
-      if (!customer) return;
+      try {
+        const res = await fetch('/Admin/UpdateCustomer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id, name: name, email: email, status: status })
+        });
 
-      // Check duplicate email with other accounts
-      if (customers.some(c => c.id !== id && c.email && c.email.toLowerCase() === email.toLowerCase())) {
-        showToast('Địa chỉ Gmail này đã trùng với tài khoản khác!', 'danger');
-        return;
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.message || 'Cập nhật thất bại.', 'danger');
+          return;
+        }
+
+        showToast(data.message || 'Đã cập nhật thông tin thành công!');
+        closeAllModals();
+        await fetchAndRenderData();
+      } catch (err) {
+        showToast('Lỗi cập nhật: ' + err.message, 'danger');
       }
-
-      customer.name = name;
-      customer.email = email;
-      customer.status = status;
-
-      saveCustomers(customers);
-      renderCustomersTable();
-      closeAllModals();
-      showToast(`Đã cập nhật thông tin tài khoản ${customer.name}!`);
     });
   }
 
-  // 11. Delete Confirmation
-  document.getElementById('btnConfirmDelete')?.addEventListener('click', () => {
+  // 11. Delete/Lock Confirmation
+  document.getElementById('btnConfirmDelete')?.addEventListener('click', async () => {
     if (!currentSelectedCustomer) return;
-    const id = currentSelectedCustomer.id;
-    const name = currentSelectedCustomer.name;
+    const id = parseInt(currentSelectedCustomer.id, 10);
+    const name = currentSelectedCustomer.username || currentSelectedCustomer.name;
 
-    let customers = getCustomers();
-    customers = customers.filter(c => c.id !== id);
-    saveCustomers(customers);
-    renderCustomersTable();
-    closeAllModals();
-    showToast(`Đã xóa tài khoản của khách hàng ${name}`, 'danger');
+    try {
+      const res = await fetch('/Admin/DeleteCustomer/' + id, {
+        method: 'POST'
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.message || 'Khóa tài khoản thất bại!', 'danger');
+        return;
+      }
+
+      showToast(data.message || `Đã khóa tài khoản ${name} thành công.`, 'danger');
+      closeAllModals();
+      await fetchAndRenderData();
+    } catch (err) {
+      showToast('Lỗi khi khóa tài khoản: ' + err.message, 'danger');
+    }
   });
 
   updateChatNavBadge();
-    // Sync live database customers & orders
-    fetch('/Admin/GetCustomersData')
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.customers && data.customers.length > 0) {
-          const mapped = data.customers.map(c => ({
-            id: c.id,
-            name: c.username,
-            email: c.email || (c.username + '@cybergame.vn'),
-            balance: c.balance,
-            status: c.status === 'active' ? 'active' : 'locked',
-            createdAt: c.createdAt || 'Hôm nay'
-          }));
-          saveCustomers(mapped);
-          renderCustomersTable();
-        }
-        if (data.success && data.orders && data.orders.length > 0) {
-          const mappedOrders = data.orders.map(o => ({
-            id: o.id,
-            customerName: o.customerName,
-            seat: o.seatNumber,
-            status: o.status,
-            total: o.total,
-            time: o.createdAt,
-            items: (o.items || []).map(i => `${i.qty}x ${i.name}`)
-          }));
-          saveOrders(mappedOrders);
-          renderOrders();
-        }
-      })
-      .catch(e => console.log('Local customers ready'));
-
-  setInterval(updateChatNavBadge, 2500);
+  setInterval(updateChatNavBadge, 5000);
 });
 
 async function updateChatNavBadge() {

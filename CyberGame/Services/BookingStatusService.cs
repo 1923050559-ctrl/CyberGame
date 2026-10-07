@@ -1,4 +1,4 @@
-﻿using CyberGame.Models;
+using CyberGame.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace CyberGame.Services
@@ -33,8 +33,11 @@ namespace CyberGame.Services
             var now = DateTime.Now;
 
             // 1) Quá hạn giữ chỗ -> expired, nhả máy (không đè máy đang bảo trì / đang có phiên chơi)
+            // Quét cả booking "pending" và "confirmed" bị No-show (quá giờ giữ chỗ HoldExpiresAt mà khách chưa nhận máy)
             var expired = await db.Bookings
-                .Where(b => b.Status == "pending" && b.HoldExpiresAt != null && b.HoldExpiresAt <= now)
+                .Where(b => (b.Status == "pending" || b.Status == "confirmed")
+                         && b.HoldExpiresAt != null && b.HoldExpiresAt <= now
+                         && !db.Sessions.Any(s => s.BookingId == b.BookingId && s.EndTime == null))
                 .ToListAsync(ct);
 
             if (expired.Count > 0)
@@ -45,7 +48,7 @@ namespace CyberGame.Services
                 var ids = expired.Select(b => b.ComputerId).Distinct().ToList();
                 await db.Computers
                     .Where(c => ids.Contains(c.ComputerId) && c.Status == "in_use"
-                        && !db.Bookings.Any(x => x.ComputerId == c.ComputerId && x.Status == "confirmed" && x.EndTime > now)
+                        && !db.Bookings.Any(x => x.ComputerId == c.ComputerId && (x.Status == "confirmed" || x.Status == "pending") && x.HoldExpiresAt > now && x.EndTime > now)
                         && !db.Sessions.Any(s => s.ComputerId == c.ComputerId && s.EndTime == null))
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, "available"), ct);
             }
