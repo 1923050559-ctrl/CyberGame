@@ -60,6 +60,10 @@ CREATE TABLE RECHARGES (
     method_id INT NOT NULL,
     status VARCHAR(20) NOT NULL CONSTRAINT DF_Recharges_Status DEFAULT 'pending',
     transaction_code VARCHAR(100) NULL,
+    sepay_transaction_id BIGINT NULL,
+    reference_code VARCHAR(100) NULL,
+    content NVARCHAR(500) NULL,
+    paid_at DATETIME NULL,
     created_at DATETIME NOT NULL CONSTRAINT DF_Recharges_CreatedAt DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL,
     CONSTRAINT FK_Recharges_Users FOREIGN KEY (user_id) REFERENCES USERS(user_id),
@@ -175,7 +179,7 @@ CREATE TABLE FOOD_ORDERS (
     CONSTRAINT FK_FoodOrders_Sessions FOREIGN KEY (session_id) REFERENCES SESSIONS(session_id),
     CONSTRAINT CK_FoodOrders_Total CHECK (total_amount >= 0),
     CONSTRAINT CK_FoodOrders_Payment CHECK (payment_method IN ('CASH', 'BANK_QR', 'WALLET')),
-    CONSTRAINT CK_FoodOrders_Status CHECK (status IN ('pending', 'preparing', 'delivered', 'completed', 'cancelled'))
+    CONSTRAINT CK_FoodOrders_Status CHECK (status IN ('pending', 'preparing', 'cooking', 'served', 'delivered', 'completed', 'cancelled'))
 );
 
 -- BẢNG 12: FOOD_ORDER_ITEMS (Chi tiết từng món trong đơn F&B)

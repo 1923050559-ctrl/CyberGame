@@ -29,10 +29,20 @@ namespace CyberGame.Models.ViewModels
     public class CreateCustomerDto
     {
         public string Username { get; set; } = null!;
+        public string? FullName { get; set; }
         public string? Email { get; set; }
         public string? Phone { get; set; }
         public string Password { get; set; } = "123456";
         public decimal InitialBalance { get; set; } = 0;
+    }
+
+    public class UpdateCustomerDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Status { get; set; }
     }
 
     public class AdminReplyDto
